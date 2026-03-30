@@ -7,7 +7,6 @@ Async video messaging for people you actually talk to.
 ## Contents
 
 - [What it is](#what-it-is)
-- [What it is not](#what-it-is-not)
 - [Privacy](#privacy)
 - [Stack](#stack)
 - [Status](#status)
