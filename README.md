@@ -26,24 +26,9 @@ The name is a nod to the radio acknowledgment — *roger that*, message received
 - **Async video messaging.** Record a video, it goes to your people. They watch it when they get to it. No pressure, no coordination, no live call required.
 - **Photos with optional voice overlay.** Send a photo with a short voice note attached. No filters, no markup.
 - **Notes.** Full-screen text with a color background. Simple.
-- **Live video.** If you and someone else happen to be in the app at the same time, you can jump to a live call. It auto-records and saves to the thread so the conversation has no gaps.
+- **Video calls** If you and someone else happen to be in the app at the same time, you can jump to a video call. It auto-records and saves to the thread so the conversation has no gaps.
 - **Emoji and video reactions.** React to individual messages with emoji (animated, no counts) or a short video reaction.
 - **Contact-based.** You find people because they're in your phone. No usernames, no handles, no search for strangers.
-
----
-
-## What it is not
-
-Roger is not trying to be everything. These were all considered and cut:
-
-- Social profiles or any public presence
-- Stories or broadcast content
-- HD video mode
-- Voice-only messages
-- Video filters or effects
-- Camera roll video imports
-- Group video calls (at launch)
-- Groups larger than 5 members (at launch)
 
 ---
 
