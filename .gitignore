@@ -1,4 +1,27 @@
-# internal docs
-Roger_Mockups.jsx
-Roger_Spec.md
+# Internal docs
+DOCUMENTATION_/
 CLAUDE.md
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.iml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Generated
+.metadata
+*.g.dart
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Environment
+.env
+.env.*
