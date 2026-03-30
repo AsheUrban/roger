@@ -12,6 +12,34 @@ import 'features/camera/camera_screen.dart';
 
 final _router = GoRouter(
   initialLocation: '/conversations',
+  redirect: (context, state) async {
+    final session = Supabase.instance.client.auth.currentSession;
+    final isOnboarding = state.uri.path == '/onboarding';
+
+    // Not authenticated → must onboard
+    if (session == null) {
+      return isOnboarding ? null : '/onboarding';
+    }
+
+    // Authenticated — check if account creation completed
+    final userRow = await Supabase.instance.client
+        .from('users')
+        .select('id')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+    if (userRow == null) {
+      // OTP verified but account creation never finished
+      return isOnboarding ? null : '/onboarding';
+    }
+
+    // Fully onboarded — don't let them back to onboarding
+    if (isOnboarding) {
+      return '/conversations';
+    }
+
+    return null;
+  },
   routes: [
     GoRoute(
       path: '/onboarding',
