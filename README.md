@@ -22,24 +22,24 @@ The name is a nod to the radio acknowledgment — *roger that*, message received
 
 ## What it is
 
-- **Async video messaging.** Record a video, it goes to your people. They watch it when they get to it. No pressure, no coordination, no live call required.
-- **Photos with optional voice overlay.** Send a photo with a short voice note attached. No filters, no markup.
-- **Notes.** Full-screen text with a color background. Simple.
-- **Video calls** If you and someone else happen to be in the app at the same time, you can jump to a video call. It auto-records and saves to the thread so the conversation has no gaps.
-- **Emoji and video reactions.** React to individual messages with emoji (animated, no counts) or a short video reaction.
-- **Contact-based.** You find people because they're in your phone. No usernames, no handles, no search for strangers.
+- **Async video messaging.** Start a back and forth video chat with one person or up to five. They watch it when they get to it, and can record a video response in reply.
+- **Photos with optional voice overlay.** Send a photo with a voice note attached.
+- **Notes.** Full-screen text with a color background.
+- **Video calls.** If you and someone else happen to be in the app at the same time, you can jump to a video call. It auto-records and saves to the thread so the conversation has no gaps.
+- **Emoji and video reactions.** React to individual messages with emojis or a video reaction.
+- **Contact-based.** Not in your contacts? Then you won't find them on roger and vice versa. This app does not feature social discovery.
 
 ---
 
 ## Privacy
 
-End-to-end encryption is not a feature — it's the architecture.
+End-to-end encryption is not a feature, it's the architecture.
 
-All content is encrypted on-device before it leaves the sender. Cloudflare R2 stores and delivers encrypted blobs only. The server never holds plaintext. Decryption happens on the recipient's device after download.
+All content is encrypted on-device before it leaves the sender and decryption happens on the recipient's device after download.
 
-Roger uses a global rolling message window (100 messages by default, adjustable). Nothing accumulates indefinitely. When a message rolls off, it is deleted from local storage and purged from R2. The framing: *your last 100 messages are always here* — not a permanent archive of your life on someone else's server.
+Roger uses a global rolling message window (100 messages by default, adjustable). Nothing accumulates indefinitely. When a message rolls off, it is deleted from local storage. Remote storage only holds encrypted content until all parties have received it.
 
-Live video calls via LiveKit are end-to-end encrypted natively. Closed captions are generated on-device via Picovoice Cheetah — no audio ever leaves the device.
+Video calls are end-to-end encrypted natively.
 
 ---
 
