@@ -15,7 +15,7 @@ Async video messaging for people you actually talk to.
 
 ---
 
-Roger is a private app for staying connected with close friends and family through short videos, photos, and notes. It is not a social network. There are no profiles, no follower counts, no algorithmic feeds, no strangers. Just the people already in your phone.
+Roger is an async video messaging app for staying connected with close friends and family through short videos, photos, and notes. It is not a social network. There are no profiles, no follower counts, no algorithmic feeds, no strangers. Just the people already in your phone.
 
 The name is a nod to the radio acknowledgment — *roger that*, message received.
 
