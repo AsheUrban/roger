@@ -30,6 +30,18 @@ class OnboardingNotifier {
         _contactsService = contactsService,
         _random = random ?? Random();
 
+  void goBack() {
+    final previous = switch (state.step) {
+      OnboardingStep.phoneEntry => OnboardingStep.phoneEntry,
+      OnboardingStep.otpVerification => OnboardingStep.phoneEntry,
+      OnboardingStep.displayName => OnboardingStep.otpVerification,
+      OnboardingStep.avatarColor => OnboardingStep.displayName,
+      OnboardingStep.recoveryEmail => OnboardingStep.avatarColor,
+      OnboardingStep.contactsPermission => OnboardingStep.recoveryEmail,
+    };
+    state = state.copyWith(step: previous, error: () => null);
+  }
+
   Future<void> submitPhoneNumber(String phoneNumber) async {
     state = state.copyWith(
       isLoading: true,
@@ -155,11 +167,19 @@ class OnboardingNotifier {
     );
   }
 
+  /// Preview a color without advancing. User can browse freely.
   void setAvatarColor(String color) {
     if (!avatarColors.contains(color)) return;
 
     state = state.copyWith(
       avatarColor: color,
+      error: () => null,
+    );
+  }
+
+  /// Confirm the selected color and advance to recovery email.
+  void confirmAvatarColor() {
+    state = state.copyWith(
       step: OnboardingStep.recoveryEmail,
       error: () => null,
     );

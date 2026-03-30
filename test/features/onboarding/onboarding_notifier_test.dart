@@ -52,6 +52,7 @@ void main() {
     if (target == OnboardingStep.avatarColor) return;
 
     notifier.setAvatarColor('Deep Ember');
+    notifier.confirmAvatarColor();
 
     if (target == OnboardingStep.recoveryEmail) return;
 
@@ -206,8 +207,16 @@ void main() {
         expect(notifier.state.avatarColor, 'Deep Ember');
       });
 
-      test('user can pick any of 9 colors', () {
+      test('user can browse colors without advancing', () {
         notifier.setAvatarColor('Cornflower');
+
+        expect(notifier.state.avatarColor, 'Cornflower');
+        expect(notifier.state.step, OnboardingStep.avatarColor);
+      });
+
+      test('confirmAvatarColor advances to recoveryEmail', () {
+        notifier.setAvatarColor('Cornflower');
+        notifier.confirmAvatarColor();
 
         expect(notifier.state.avatarColor, 'Cornflower');
         expect(notifier.state.step, OnboardingStep.recoveryEmail);
@@ -216,8 +225,9 @@ void main() {
       test('ignores invalid color', () {
         notifier.setAvatarColor('Neon Green');
 
-        // Stays on avatarColor step
+        // Stays on avatarColor step, keeps previous color
         expect(notifier.state.step, OnboardingStep.avatarColor);
+        expect(notifier.state.avatarColor, 'Deep Ember');
       });
     });
 
@@ -388,6 +398,65 @@ void main() {
         verify(() => contactsService.requestPermission()).called(1);
         verify(() => contactsService.refreshBatchCheck()).called(1);
         verifyNoMoreInteractions(contactsService);
+      });
+    });
+
+    group('back navigation', () {
+      test('goBack from otpVerification returns to phoneEntry', () async {
+        await advanceTo(OnboardingStep.otpVerification);
+
+        notifier.goBack();
+
+        expect(notifier.state.step, OnboardingStep.phoneEntry);
+      });
+
+      test('goBack from displayName returns to otpVerification', () async {
+        await advanceTo(OnboardingStep.displayName);
+
+        notifier.goBack();
+
+        expect(notifier.state.step, OnboardingStep.otpVerification);
+      });
+
+      test('goBack from avatarColor returns to displayName', () async {
+        await advanceTo(OnboardingStep.avatarColor);
+
+        notifier.goBack();
+
+        expect(notifier.state.step, OnboardingStep.displayName);
+      });
+
+      test('goBack from recoveryEmail returns to avatarColor', () async {
+        await advanceTo(OnboardingStep.recoveryEmail);
+
+        notifier.goBack();
+
+        expect(notifier.state.step, OnboardingStep.avatarColor);
+      });
+
+      test('goBack from contactsPermission returns to recoveryEmail',
+          () async {
+        await advanceTo(OnboardingStep.contactsPermission);
+
+        notifier.goBack();
+
+        expect(notifier.state.step, OnboardingStep.recoveryEmail);
+      });
+
+      test('goBack from phoneEntry stays on phoneEntry', () {
+        notifier.goBack();
+
+        expect(notifier.state.step, OnboardingStep.phoneEntry);
+      });
+
+      test('goBack clears error state', () async {
+        await advanceTo(OnboardingStep.displayName);
+        notifier.setDisplayName(''); // triggers error
+        expect(notifier.state.error, isNotNull);
+
+        notifier.goBack();
+
+        expect(notifier.state.error, isNull);
       });
     });
   });
