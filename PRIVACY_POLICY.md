@@ -17,7 +17,7 @@ This policy explains what information we do collect, why, and how it is handled.
 
 ### Information You Provide
 
-**Account information.** When you create an account, we collect your phone number and display name. Your phone number is your identity in roger. Your display name is visible to people you message.
+**Account information.** When you create an account, we collect your phone number and display name. Your display name is visible to people you message, your phone number is how people will find you.
 
 **Recovery email.** You may optionally provide an email address for account recovery. This is not required and is never used for marketing.
 
@@ -41,7 +41,7 @@ When you grant contacts permission, roger hashes your contacts' phone numbers on
 
 | Data | Purpose |
 |---|---|
-| Phone number | Account identity and authentication |
+| Phone number | Authentication and contact discovery |
 | Display name | Shown to conversation members |
 | Recovery email | Account recovery only, if provided |
 | Encrypted message content | Delivery to recipients via Cloudflare R2 |
