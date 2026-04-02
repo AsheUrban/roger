@@ -2,15 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/theme/colors.dart';
 import 'onboarding_notifier.dart';
 import 'onboarding_state.dart';
-
-// Spec colors
-const _charcoal = Color(0xFF1E1D18);
-const _charcoal2 = Color(0xFF2E2D26);
-const _warmWhite = Color(0xFFFAFAF5);
-// Error text: warm white at 70% — salmon is reserved for camera actions only
-const _errorColor = Color(0xB3FAFAF5);
 
 class OnboardingScreen extends ConsumerWidget {
   const OnboardingScreen({super.key});
@@ -26,7 +20,7 @@ class OnboardingScreen extends ConsumerWidget {
     });
 
     return Scaffold(
-      backgroundColor: _charcoal,
+      backgroundColor: charcoal,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
@@ -74,7 +68,7 @@ class _EmailEntryStepState extends ConsumerState<_EmailEntryStep> {
         const Text(
           'roger',
           style: TextStyle(
-            color: _warmWhite,
+            color: warmWhite,
             fontSize: 40,
             fontWeight: FontWeight.w400,
           ),
@@ -84,15 +78,15 @@ class _EmailEntryStepState extends ConsumerState<_EmailEntryStep> {
         TextField(
           controller: _controller,
           keyboardType: TextInputType.emailAddress,
-          style: const TextStyle(color: _warmWhite),
+          style: const TextStyle(color: warmWhite),
           decoration: InputDecoration(
             hintText: 'Email address',
-            hintStyle: TextStyle(color: _warmWhite.withValues(alpha: 0.5)),
+            hintStyle: TextStyle(color: warmWhite.withValues(alpha: 0.5)),
             enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: _warmWhite.withValues(alpha: 0.3)),
+              borderSide: BorderSide(color: warmWhite.withValues(alpha: 0.3)),
             ),
             focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: _warmWhite),
+              borderSide: BorderSide(color: warmWhite),
             ),
           ),
         ),
@@ -131,20 +125,20 @@ class _AwaitingEmailStep extends ConsumerWidget {
         const Spacer(),
         const Text(
           'Check your email',
-          style: TextStyle(color: _warmWhite, fontSize: 24),
+          style: TextStyle(color: warmWhite, fontSize: 24),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 16),
         Text(
           state.email,
-          style: const TextStyle(color: _warmWhite, fontSize: 18),
+          style: const TextStyle(color: warmWhite, fontSize: 18),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 16),
         Text(
           'Tap the link in the email to continue.\nOpen it on this device.',
           style: TextStyle(
-            color: _warmWhite.withValues(alpha: 0.6),
+            color: warmWhite.withValues(alpha: 0.6),
             fontSize: 14,
           ),
           textAlign: TextAlign.center,
@@ -158,7 +152,7 @@ class _AwaitingEmailStep extends ConsumerWidget {
               height: 20,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: _warmWhite,
+                color: warmWhite,
               ),
             ),
           ),
@@ -168,7 +162,7 @@ class _AwaitingEmailStep extends ConsumerWidget {
           onPressed: state.isLoading ? null : notifier.resendMagicLink,
           child: const Text(
             'Resend email',
-            style: TextStyle(color: _warmWhite),
+            style: TextStyle(color: warmWhite),
           ),
         ),
         const Spacer(flex: 2),
@@ -208,14 +202,14 @@ class _PhoneNumberStepState extends ConsumerState<_PhoneNumberStep> {
         const Spacer(),
         const Text(
           'Your phone number',
-          style: TextStyle(color: _warmWhite, fontSize: 24),
+          style: TextStyle(color: warmWhite, fontSize: 24),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 12),
         Text(
           'Your phone number helps friends find you on roger.',
           style: TextStyle(
-            color: _warmWhite.withValues(alpha: 0.6),
+            color: warmWhite.withValues(alpha: 0.6),
             fontSize: 14,
           ),
           textAlign: TextAlign.center,
@@ -224,15 +218,15 @@ class _PhoneNumberStepState extends ConsumerState<_PhoneNumberStep> {
         TextField(
           controller: _controller,
           keyboardType: TextInputType.phone,
-          style: const TextStyle(color: _warmWhite),
+          style: const TextStyle(color: warmWhite),
           decoration: InputDecoration(
             hintText: 'Phone number',
-            hintStyle: TextStyle(color: _warmWhite.withValues(alpha: 0.5)),
+            hintStyle: TextStyle(color: warmWhite.withValues(alpha: 0.5)),
             enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: _warmWhite.withValues(alpha: 0.3)),
+              borderSide: BorderSide(color: warmWhite.withValues(alpha: 0.3)),
             ),
             focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: _warmWhite),
+              borderSide: BorderSide(color: warmWhite),
             ),
           ),
         ),
@@ -282,23 +276,23 @@ class _DisplayNameStepState extends ConsumerState<_DisplayNameStep> {
         const Spacer(),
         const Text(
           'What should people\ncall you?',
-          style: TextStyle(color: _warmWhite, fontSize: 24),
+          style: TextStyle(color: warmWhite, fontSize: 24),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 32),
         TextField(
           controller: _controller,
           maxLength: 50,
-          style: const TextStyle(color: _warmWhite),
+          style: const TextStyle(color: warmWhite),
           decoration: InputDecoration(
             hintText: 'Display name',
-            hintStyle: TextStyle(color: _warmWhite.withValues(alpha: 0.5)),
-            counterStyle: TextStyle(color: _warmWhite.withValues(alpha: 0.3)),
+            hintStyle: TextStyle(color: warmWhite.withValues(alpha: 0.5)),
+            counterStyle: TextStyle(color: warmWhite.withValues(alpha: 0.3)),
             enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: _warmWhite.withValues(alpha: 0.3)),
+              borderSide: BorderSide(color: warmWhite.withValues(alpha: 0.3)),
             ),
             focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: _warmWhite),
+              borderSide: BorderSide(color: warmWhite),
             ),
           ),
         ),
@@ -334,7 +328,7 @@ class _ContactsPermissionStep extends ConsumerWidget {
         const Spacer(),
         const Text(
           'Find your people',
-          style: TextStyle(color: _warmWhite, fontSize: 24),
+          style: TextStyle(color: warmWhite, fontSize: 24),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 12),
@@ -342,7 +336,7 @@ class _ContactsPermissionStep extends ConsumerWidget {
           'Allow contacts access to find friends on roger. '
           'Your contacts are hashed on-device — raw numbers never leave your phone.',
           style: TextStyle(
-            color: _warmWhite.withValues(alpha: 0.6),
+            color: warmWhite.withValues(alpha: 0.6),
             fontSize: 14,
           ),
           textAlign: TextAlign.center,
@@ -358,7 +352,7 @@ class _ContactsPermissionStep extends ConsumerWidget {
           onPressed: state.isLoading ? null : notifier.skipContactsPermission,
           child: const Text(
             'Not now',
-            style: TextStyle(color: _warmWhite),
+            style: TextStyle(color: warmWhite),
           ),
         ),
         _ErrorText(state.error),
@@ -382,7 +376,7 @@ class _BackButton extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: IconButton(
         onPressed: onPressed,
-        icon: const Icon(Icons.arrow_back, color: _warmWhite),
+        icon: const Icon(Icons.arrow_back, color: warmWhite),
       ),
     );
   }
@@ -400,7 +394,7 @@ class _ErrorText extends StatelessWidget {
       padding: const EdgeInsets.only(top: 12),
       child: Text(
         error!,
-        style: const TextStyle(color: _errorColor, fontSize: 14),
+        style: const TextStyle(color: errorColor, fontSize: 14),
       ),
     );
   }
@@ -424,8 +418,8 @@ class _PrimaryButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: _charcoal2,
-          foregroundColor: _warmWhite,
+          backgroundColor: charcoal2,
+          foregroundColor: warmWhite,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -436,7 +430,7 @@ class _PrimaryButton extends StatelessWidget {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: _warmWhite,
+                  color: warmWhite,
                 ),
               )
             : Text(label, style: const TextStyle(fontSize: 16)),

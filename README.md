@@ -20,6 +20,19 @@ The name is a nod to the radio acknowledgment — *roger that*, message received
 
 ---
 
+## Branches
+
+| Branch | Purpose |
+|--------|---------|
+| `main` | Stable, reviewed code only |
+| `dev` | Active development — all work lands here first |
+
+## Status
+
+Active development. Not yet publicly available.
+
+---
+
 ## What it is
 
 - **Async video messaging.** Start a back and forth video chat with one person or up to five. They watch it when they get to it, and can record a video response in reply.
@@ -56,12 +69,6 @@ Video calls are end-to-end encrypted natively.
 | Key Storage | iCloud Keychain (iOS) · Android Keystore (Android) |
 | State Management | Riverpod |
 | Local Storage | drift / sqflite |
-
----
-
-## Status
-
-Active development. Not yet publicly available.
 
 ---
 

@@ -325,10 +325,8 @@ void main() {
         expect(notifier.state.onboardingComplete, true);
       });
 
-      test('deep link arrival skips to pending conversation',
-          skip: 'Deep link routing lives in GoRouter, not the notifier. '
-              'Add integration test when router is wired up.',
-          () {});
+      // Deep link routing tested in test/core/routing_test.dart (unit)
+      // and integration_test/ (on-device). Not a notifier concern.
 
       test('createAccount fails, user can retry', () async {
         when(() => contactsService.requestPermission())

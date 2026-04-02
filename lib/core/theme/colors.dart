@@ -1,0 +1,27 @@
+import 'package:flutter/material.dart';
+
+// Spec section 4 — UI colors
+const charcoal = Color(0xFF1E1D18);
+const charcoal2 = Color(0xFF2E2D26);
+const warmWhite = Color(0xFFFAFAF5);
+const salmon = Color(0xFFFF6B4E);
+const oliveDark = Color(0xFF595900);
+const oliveLight = Color(0xFFE8E600);
+
+// Error text: warm white at 70% — salmon is reserved for camera actions only
+const errorColor = Color(0xB3FAFAF5);
+
+// Spec section 4 — Avatar color system
+// 9 colors: (background, foreground)
+// Verify visually on emulator — hex values may need tuning.
+const avatarColorMap = <String, (Color, Color)>{
+  'Deep Red': (Color(0xFF2E0A0A), Color(0xFFFF8A80)),
+  'Rust': (Color(0xFF7A3B2E), Color(0xFFFFB8A0)),
+  'Deep Ember': (Color(0xFF3D1500), Color(0xFFFF6B4E)),
+  'Burnt Orange': (Color(0xFF4A2800), Color(0xFFFFB347)),
+  'Salmon': (Color(0xFFFF6B4E), Color(0xFFFFF0ED)),
+  'Rose': (Color(0xFFFF5E7A), Color(0xFFFFE8EE)),
+  'Olive': (Color(0xFF595900), Color(0xFFE8E600)),
+  'Cornflower': (Color(0xFF6395EE), Color(0xFFEDD4FA)),
+  'Charcoal': (Color(0xFF1E1D18), Color(0xFFFAFAF5)),
+};

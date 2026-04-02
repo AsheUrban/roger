@@ -4,43 +4,62 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config/env.dart';
+import 'core/providers.dart';
 import 'features/conversations/conversations_screen.dart';
 import 'features/search/search_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/camera/camera_screen.dart';
 
+/// Redirect logic extracted for testability.
+/// [session] is the current auth session (null if not authenticated).
+/// [hasUsersRow] is a function that checks if the public.users row exists.
+/// Returns the path to redirect to, or null to stay on current path.
+Future<String?> routerRedirect({
+  required Session? session,
+  required Future<bool> Function(String userId) hasUsersRow,
+  required String path,
+}) async {
+  final isOnboarding = path == '/onboarding';
+
+  // Not authenticated → must onboard
+  if (session == null) {
+    return isOnboarding ? null : '/onboarding';
+  }
+
+  // Authenticated — check if account creation completed
+  final exists = await hasUsersRow(session.user.id);
+
+  if (!exists) {
+    // Magic link verified but account creation never finished
+    return isOnboarding ? null : '/onboarding';
+  }
+
+  // Fully onboarded — don't let them back to onboarding
+  if (isOnboarding) {
+    return '/conversations';
+  }
+
+  return null;
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
+  final client = ref.read(supabaseClientProvider);
+
   return GoRouter(
     initialLocation: '/conversations',
-    redirect: (context, state) async {
-      final session = Supabase.instance.client.auth.currentSession;
-      final isOnboarding = state.uri.path == '/onboarding';
-
-      // Not authenticated → must onboard
-      if (session == null) {
-        return isOnboarding ? null : '/onboarding';
-      }
-
-      // Authenticated — check if account creation completed
-      final userRow = await Supabase.instance.client
-          .from('users')
-          .select('id')
-          .eq('id', session.user.id)
-          .maybeSingle();
-
-      if (userRow == null) {
-        // Magic link verified but account creation never finished
-        return isOnboarding ? null : '/onboarding';
-      }
-
-      // Fully onboarded — don't let them back to onboarding
-      if (isOnboarding) {
-        return '/conversations';
-      }
-
-      return null;
-    },
+    redirect: (context, state) => routerRedirect(
+      session: client.auth.currentSession,
+      hasUsersRow: (userId) async {
+        final row = await client
+            .from('users')
+            .select('id')
+            .eq('id', userId)
+            .maybeSingle();
+        return row != null;
+      },
+      path: state.uri.path,
+    ),
     routes: [
       GoRoute(
         path: '/onboarding',

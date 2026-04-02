@@ -30,4 +30,21 @@ class SearchState {
     this.isLoading = false,
     this.error,
   });
+
+  SearchState copyWith({
+    String? query,
+    List<SearchResult>? results,
+    bool? hasContactsPermission,
+    bool? isLoading,
+    String? Function()? error,
+  }) {
+    return SearchState(
+      query: query ?? this.query,
+      results: results ?? this.results,
+      hasContactsPermission:
+          hasContactsPermission ?? this.hasContactsPermission,
+      isLoading: isLoading ?? this.isLoading,
+      error: error != null ? error() : this.error,
+    );
+  }
 }
