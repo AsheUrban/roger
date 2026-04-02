@@ -5,9 +5,8 @@ class SettingsNotifier {
 
   Future<void> loadSettings() async {}
   Future<void> updateDisplayName(String name) async {}
-  Future<void> updatePhoneNumber(String newNumber, String otp) async {}
+  Future<void> updatePhoneNumber(String newNumber) async {}
   Future<void> updateAvatarColor(String color) async {}
-  Future<void> setRecoveryEmail(String email) async {}
   Future<void> updateMessageLimit(int limit) async {}
   Future<void> toggleDisappearingMessages() async {}
   Future<void> updateNotificationSettings({

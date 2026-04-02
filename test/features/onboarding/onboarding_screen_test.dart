@@ -7,22 +7,16 @@ void main() {
   // All tests skipped until the Riverpod conversion.
 
   group('OnboardingScreen', () {
-    test('renders phone number input on phoneEntry step',
+    test('renders email input on emailEntry step',
         skip: 'Requires Supabase mock injection via Riverpod.', () {});
 
-    test('renders OTP input on otpVerification step',
+    test('renders awaiting email screen on awaitingEmail step',
+        skip: 'Requires Supabase mock injection via Riverpod.', () {});
+
+    test('renders phone number input on phoneNumber step',
         skip: 'Requires Supabase mock injection via Riverpod.', () {});
 
     test('renders display name input on displayName step',
-        skip: 'Requires Supabase mock injection via Riverpod.', () {});
-
-    test('renders 9 avatar color options on avatarColor step',
-        skip: 'Requires Supabase mock injection via Riverpod.', () {});
-
-    test('renders recovery email input with skip option',
-        skip: 'Requires Supabase mock injection via Riverpod.', () {});
-
-    test('shows consequence copy when skipping recovery email',
         skip: 'Requires Supabase mock injection via Riverpod.', () {});
 
     test('renders contacts permission request',

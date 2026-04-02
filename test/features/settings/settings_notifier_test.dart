@@ -10,15 +10,11 @@ void main() {
       fail('not implemented');
     });
 
-    test('updatePhoneNumber requires OTP verification first', () {
+    test('updatePhoneNumber updates number directly (no OTP at MVP)', () {
       fail('not implemented');
     });
 
     test('updateAvatarColor changes color globally', () {
-      fail('not implemented');
-    });
-
-    test('setRecoveryEmail sends verification link', () {
       fail('not implemented');
     });
 

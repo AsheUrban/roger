@@ -30,53 +30,24 @@ class OnboardingNotifier {
         _contactsService = contactsService,
         _random = random ?? Random();
 
+  static final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
   void goBack() {
     final previous = switch (state.step) {
-      OnboardingStep.phoneEntry => OnboardingStep.phoneEntry,
-      OnboardingStep.otpVerification => OnboardingStep.phoneEntry,
-      OnboardingStep.displayName => OnboardingStep.otpVerification,
-      OnboardingStep.avatarColor => OnboardingStep.displayName,
-      OnboardingStep.recoveryEmail => OnboardingStep.avatarColor,
-      OnboardingStep.contactsPermission => OnboardingStep.recoveryEmail,
+      OnboardingStep.emailEntry => OnboardingStep.emailEntry,
+      OnboardingStep.awaitingEmail => OnboardingStep.emailEntry,
+      OnboardingStep.phoneNumber => OnboardingStep.awaitingEmail,
+      OnboardingStep.displayName => OnboardingStep.phoneNumber,
+      OnboardingStep.contactsPermission => OnboardingStep.displayName,
     };
     state = state.copyWith(step: previous, error: () => null);
   }
 
-  Future<void> submitPhoneNumber(String phoneNumber) async {
-    state = state.copyWith(
-      isLoading: true,
-      error: () => null,
-    );
-
-    try {
-      await _authService.sendOtp(phoneNumber);
+  Future<void> sendMagicLink(String email) async {
+    final trimmed = email.trim();
+    if (trimmed.isEmpty || !_emailPattern.hasMatch(trimmed)) {
       state = state.copyWith(
-        phoneNumber: phoneNumber,
-        step: OnboardingStep.otpVerification,
-        isLoading: false,
-        canResendOtp: false,
-      );
-
-      // 30-second cooldown before resend is available
-      Future.delayed(const Duration(seconds: 30), () {
-        if (state.step == OnboardingStep.otpVerification) {
-          state = state.copyWith(canResendOtp: true);
-        }
-      });
-    } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: () => e.toString(),
-      );
-    }
-  }
-
-  Future<void> verifyOtp(String otp) async {
-    if (state.otpAttemptsRemaining <= 0) {
-      state = state.copyWith(
-        error: () => 'Too many attempts. Please request a new code.',
-        step: OnboardingStep.phoneEntry,
-        otpAttemptsRemaining: 5,
+        error: () => 'Please enter a valid email address.',
       );
       return;
     }
@@ -87,60 +58,104 @@ class OnboardingNotifier {
     );
 
     try {
-      final user = await _authService.verifyOtp(state.phoneNumber, otp);
+      await _authService.sendMagicLink(trimmed);
+      state = state.copyWith(
+        email: trimmed,
+        step: OnboardingStep.awaitingEmail,
+        isLoading: false,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: () => e.toString(),
+      );
+    }
+  }
 
-      if (user != null) {
-        // Existing user — log them in, skip onboarding
+  Future<void> resendMagicLink() async {
+    state = state.copyWith(
+      isLoading: true,
+      error: () => null,
+    );
+
+    try {
+      await _authService.sendMagicLink(state.email);
+      state = state.copyWith(isLoading: false);
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: () => e.toString(),
+      );
+    }
+  }
+
+  /// Called when Supabase auth state changes to signed-in (magic link callback).
+  /// Checks if the user already has a public.users row.
+  Future<void> onAuthStateChanged() async {
+    state = state.copyWith(isLoading: true, error: () => null);
+
+    try {
+      final existingUser = await _authService.getCurrentUser();
+
+      if (existingUser != null) {
+        // Existing user — skip onboarding
         state = state.copyWith(
           isLoading: false,
           onboardingComplete: true,
         );
       } else {
-        // New user — continue onboarding
+        // New user — assign random avatar color, continue onboarding
         final defaultColor = avatarColors[_random.nextInt(avatarColors.length)];
         state = state.copyWith(
-          otp: otp,
-          step: OnboardingStep.displayName,
+          step: OnboardingStep.phoneNumber,
           avatarColor: defaultColor,
           isLoading: false,
         );
       }
     } catch (e) {
-      final remaining = state.otpAttemptsRemaining - 1;
-      if (remaining <= 0) {
-        state = state.copyWith(
-          isLoading: false,
-          otpAttemptsRemaining: 5,
-          step: OnboardingStep.phoneEntry,
-          error: () => 'Too many attempts. Please request a new code.',
-        );
-      } else {
-        state = state.copyWith(
-          isLoading: false,
-          otpAttemptsRemaining: remaining,
-          error: () => 'Incorrect code. $remaining attempts remaining.',
-        );
-      }
+      state = state.copyWith(
+        isLoading: false,
+        error: () => e.toString(),
+      );
     }
   }
 
-  Future<void> resendOtp() async {
-    if (!state.canResendOtp) return;
+  Future<void> submitPhoneNumber(String phone) async {
+    final trimmed = phone.trim();
+    if (trimmed.isEmpty) {
+      state = state.copyWith(
+        error: () => 'Phone number cannot be empty.',
+      );
+      return;
+    }
 
-    state = state.copyWith(canResendOtp: false);
+    state = state.copyWith(
+      isLoading: true,
+      error: () => null,
+    );
 
     try {
-      await _authService.sendOtp(state.phoneNumber);
+      final taken = await _authService.isPhoneNumberTaken(trimmed);
+      if (taken) {
+        state = state.copyWith(
+          isLoading: false,
+          error: () => 'This phone number is already in use. '
+              'Please enter a different number.',
+        );
+        return;
+      }
 
-      Future.delayed(const Duration(seconds: 30), () {
-        if (state.step == OnboardingStep.otpVerification) {
-          state = state.copyWith(canResendOtp: true);
-        }
-      });
-    } catch (e) {
       state = state.copyWith(
-        error: () => e.toString(),
-        canResendOtp: true,
+        phoneNumber: trimmed,
+        step: OnboardingStep.displayName,
+        isLoading: false,
+      );
+    } catch (e) {
+      // Network failure — allow through, createAccount will catch duplicates
+      state = state.copyWith(
+        phoneNumber: trimmed,
+        step: OnboardingStep.displayName,
+        isLoading: false,
       );
     }
   }
@@ -162,40 +177,6 @@ class OnboardingNotifier {
 
     state = state.copyWith(
       displayName: trimmed,
-      step: OnboardingStep.avatarColor,
-      error: () => null,
-    );
-  }
-
-  /// Preview a color without advancing. User can browse freely.
-  void setAvatarColor(String color) {
-    if (!avatarColors.contains(color)) return;
-
-    state = state.copyWith(
-      avatarColor: color,
-      error: () => null,
-    );
-  }
-
-  /// Confirm the selected color and advance to recovery email.
-  void confirmAvatarColor() {
-    state = state.copyWith(
-      step: OnboardingStep.recoveryEmail,
-      error: () => null,
-    );
-  }
-
-  void setRecoveryEmail(String email) {
-    state = state.copyWith(
-      recoveryEmail: () => email,
-      step: OnboardingStep.contactsPermission,
-      error: () => null,
-    );
-  }
-
-  void skipRecoveryEmail() {
-    state = state.copyWith(
-      recoveryEmail: () => null,
       step: OnboardingStep.contactsPermission,
       error: () => null,
     );
@@ -210,7 +191,6 @@ class OnboardingNotifier {
       _contactsService.refreshBatchCheck();
     }
 
-    // Whether granted or denied, onboarding continues
     await completeOnboarding();
   }
 
@@ -226,10 +206,10 @@ class OnboardingNotifier {
 
     try {
       await _authService.createAccount(
+        email: state.email,
         phoneNumber: state.phoneNumber,
         displayName: state.displayName,
         avatarColor: state.avatarColor,
-        recoveryEmail: state.recoveryEmail,
       );
 
       state = state.copyWith(

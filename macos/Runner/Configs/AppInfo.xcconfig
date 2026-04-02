@@ -8,7 +8,7 @@
 PRODUCT_NAME = roger
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.roger.roger
+PRODUCT_BUNDLE_IDENTIFIER = com.rogermessaging.app
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.roger. All rights reserved.

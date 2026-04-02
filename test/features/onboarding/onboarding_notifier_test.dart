@@ -33,132 +33,167 @@ void main() {
 
   /// Helper: advance notifier to a given step with valid state
   Future<void> advanceTo(OnboardingStep target) async {
-    if (target == OnboardingStep.phoneEntry) return;
+    if (target == OnboardingStep.emailEntry) return;
 
-    when(() => authService.sendOtp(any())).thenAnswer((_) async {});
-    await notifier.submitPhoneNumber('+15551234567');
+    when(() => authService.sendMagicLink(any())).thenAnswer((_) async {});
+    await notifier.sendMagicLink('ashe@example.com');
 
-    if (target == OnboardingStep.otpVerification) return;
+    if (target == OnboardingStep.awaitingEmail) return;
 
-    // verifyOtp returns null → new user, continue onboarding
-    when(() => authService.verifyOtp(any(), any()))
+    // Simulate magic link callback — new user
+    when(() => authService.getCurrentUser())
         .thenAnswer((_) async => null);
-    await notifier.verifyOtp('123456');
+    await notifier.onAuthStateChanged();
+
+    if (target == OnboardingStep.phoneNumber) return;
+
+    when(() => authService.isPhoneNumberTaken(any()))
+        .thenAnswer((_) async => false);
+    await notifier.submitPhoneNumber('+15551234567');
 
     if (target == OnboardingStep.displayName) return;
 
     notifier.setDisplayName('Ashe');
-
-    if (target == OnboardingStep.avatarColor) return;
-
-    notifier.setAvatarColor('Deep Ember');
-    notifier.confirmAvatarColor();
-
-    if (target == OnboardingStep.recoveryEmail) return;
-
-    notifier.skipRecoveryEmail();
   }
 
   group('OnboardingNotifier', () {
-    group('phone entry', () {
-      test('submitPhoneNumber sends OTP and advances to otpVerification',
+    group('email entry', () {
+      test('sendMagicLink calls authService and advances to awaitingEmail',
           () async {
-        when(() => authService.sendOtp('+15551234567'))
+        when(() => authService.sendMagicLink('ashe@example.com'))
             .thenAnswer((_) async {});
 
-        await notifier.submitPhoneNumber('+15551234567');
+        await notifier.sendMagicLink('ashe@example.com');
 
-        verify(() => authService.sendOtp('+15551234567')).called(1);
-        expect(notifier.state.step, OnboardingStep.otpVerification);
-        expect(notifier.state.phoneNumber, '+15551234567');
+        verify(() => authService.sendMagicLink('ashe@example.com')).called(1);
+        expect(notifier.state.step, OnboardingStep.awaitingEmail);
+        expect(notifier.state.email, 'ashe@example.com');
         expect(notifier.state.isLoading, false);
       });
 
-      test('user can go back and re-enter phone number before OTP sent',
-          () async {
-        // Initial state is phoneEntry — user hasn't submitted yet
-        expect(notifier.state.step, OnboardingStep.phoneEntry);
-
-        // User can submit a different number
-        when(() => authService.sendOtp('+15559999999'))
+      test('trims whitespace from email', () async {
+        when(() => authService.sendMagicLink('ashe@example.com'))
             .thenAnswer((_) async {});
-        await notifier.submitPhoneNumber('+15559999999');
 
-        expect(notifier.state.phoneNumber, '+15559999999');
+        await notifier.sendMagicLink('  ashe@example.com  ');
+
+        expect(notifier.state.email, 'ashe@example.com');
+        expect(notifier.state.step, OnboardingStep.awaitingEmail);
       });
 
-      test('submitPhoneNumber shows error on failure', () async {
-        when(() => authService.sendOtp(any()))
+      test('rejects empty email', () async {
+        await notifier.sendMagicLink('');
+
+        expect(notifier.state.step, OnboardingStep.emailEntry);
+        expect(notifier.state.error, contains('valid email'));
+        verifyNever(() => authService.sendMagicLink(any()));
+      });
+
+      test('rejects invalid email format', () async {
+        await notifier.sendMagicLink('not-an-email');
+
+        expect(notifier.state.step, OnboardingStep.emailEntry);
+        expect(notifier.state.error, contains('valid email'));
+        verifyNever(() => authService.sendMagicLink(any()));
+      });
+
+      test('shows error on failure', () async {
+        when(() => authService.sendMagicLink(any()))
             .thenThrow(Exception('Network error'));
 
-        await notifier.submitPhoneNumber('+15551234567');
+        await notifier.sendMagicLink('ashe@example.com');
 
-        expect(notifier.state.step, OnboardingStep.phoneEntry);
+        expect(notifier.state.step, OnboardingStep.emailEntry);
         expect(notifier.state.error, isNotNull);
         expect(notifier.state.isLoading, false);
       });
     });
 
-    group('OTP verification', () {
+    group('awaiting email', () {
       setUp(() async {
-        await advanceTo(OnboardingStep.otpVerification);
+        await advanceTo(OnboardingStep.awaitingEmail);
       });
 
-      test('correct OTP advances to displayName step', () async {
-        when(() => authService.verifyOtp(any(), '123456'))
+      test('onAuthStateChanged with existing user completes onboarding',
+          () async {
+        when(() => authService.getCurrentUser()).thenAnswer((_) async => User(
+              id: 'existing-id',
+              email: 'ashe@example.com',
+              phoneNumber: '+15551234567',
+              displayName: 'Existing',
+              avatarColor: 'Rust',
+              createdAt: DateTime.now(),
+            ));
+
+        await notifier.onAuthStateChanged();
+
+        expect(notifier.state.onboardingComplete, true);
+      });
+
+      test('onAuthStateChanged with new user assigns avatar and advances',
+          () async {
+        when(() => authService.getCurrentUser())
             .thenAnswer((_) async => null);
 
-        await notifier.verifyOtp('123456');
+        await notifier.onAuthStateChanged();
 
-        expect(notifier.state.step, OnboardingStep.displayName);
-        expect(notifier.state.isLoading, false);
+        expect(notifier.state.step, OnboardingStep.phoneNumber);
+        expect(notifier.state.avatarColor, 'Deep Ember');
       });
 
-      test('incorrect OTP decrements attempts remaining', () async {
-        when(() => authService.verifyOtp(any(), 'wrong'))
-            .thenThrow(Exception('Invalid OTP'));
+      test('resendMagicLink calls authService again', () async {
+        reset(authService);
+        when(() => authService.sendMagicLink('ashe@example.com'))
+            .thenAnswer((_) async {});
 
-        await notifier.verifyOtp('wrong');
+        await notifier.resendMagicLink();
 
-        expect(notifier.state.otpAttemptsRemaining, 4);
-        expect(notifier.state.step, OnboardingStep.otpVerification);
+        verify(() => authService.sendMagicLink('ashe@example.com')).called(1);
+      });
+    });
+
+    group('phone number', () {
+      setUp(() async {
+        await advanceTo(OnboardingStep.phoneNumber);
+      });
+
+      test('submitPhoneNumber stores value and advances to displayName',
+          () async {
+        when(() => authService.isPhoneNumberTaken('+15551234567'))
+            .thenAnswer((_) async => false);
+
+        await notifier.submitPhoneNumber('+15551234567');
+
+        expect(notifier.state.phoneNumber, '+15551234567');
+        expect(notifier.state.step, OnboardingStep.displayName);
+      });
+
+      test('rejects empty phone number', () async {
+        await notifier.submitPhoneNumber('');
+
+        expect(notifier.state.step, OnboardingStep.phoneNumber);
         expect(notifier.state.error, isNotNull);
       });
 
-      test('5 failed attempts resets flow and requires new OTP', () async {
-        when(() => authService.verifyOtp(any(), 'wrong'))
-            .thenThrow(Exception('Invalid OTP'));
-
-        for (var i = 0; i < 5; i++) {
-          await notifier.verifyOtp('wrong');
-        }
-
-        expect(notifier.state.step, OnboardingStep.phoneEntry);
-        expect(notifier.state.otpAttemptsRemaining, 5);
-        expect(notifier.state.error, contains('Too many attempts'));
-      });
-
-      test('resendOtp available after 30 seconds', () async {
-        // Right after submit, canResendOtp is false
-        expect(notifier.state.canResendOtp, false);
-      });
-
-      test('existing phone number logs in instead of creating duplicate',
+      test('rejects phone number already claimed by another account',
           () async {
-        final existingUser = User(
-          id: 'existing-id',
-          phoneNumber: '+15551234567',
-          displayName: 'Existing',
-          avatarColor: 'Rust',
-          createdAt: DateTime.now(),
-        );
-        when(() => authService.verifyOtp(any(), '123456'))
-            .thenAnswer((_) async => existingUser);
+        when(() => authService.isPhoneNumberTaken('+15559999999'))
+            .thenAnswer((_) async => true);
 
-        await notifier.verifyOtp('123456');
+        await notifier.submitPhoneNumber('+15559999999');
 
-        // Skips onboarding entirely
-        expect(notifier.state.onboardingComplete, true);
+        expect(notifier.state.step, OnboardingStep.phoneNumber);
+        expect(notifier.state.error, contains('already in use'));
+      });
+
+      test('trims whitespace', () async {
+        when(() => authService.isPhoneNumberTaken('+15551234567'))
+            .thenAnswer((_) async => false);
+
+        await notifier.submitPhoneNumber('  +15551234567  ');
+
+        expect(notifier.state.phoneNumber, '+15551234567');
+        expect(notifier.state.step, OnboardingStep.displayName);
       });
     });
 
@@ -171,7 +206,7 @@ void main() {
         notifier.setDisplayName('Ashe');
 
         expect(notifier.state.displayName, 'Ashe');
-        expect(notifier.state.step, OnboardingStep.avatarColor);
+        expect(notifier.state.step, OnboardingStep.contactsPermission);
         expect(notifier.state.error, isNull);
       });
 
@@ -193,60 +228,6 @@ void main() {
         notifier.setDisplayName('  Ashe  ');
 
         expect(notifier.state.displayName, 'Ashe');
-        expect(notifier.state.step, OnboardingStep.avatarColor);
-      });
-    });
-
-    group('avatar color', () {
-      setUp(() async {
-        await advanceTo(OnboardingStep.avatarColor);
-      });
-
-      test('randomized default from 9-color system', () {
-        // MockRandom returns 2 → 'Deep Ember'
-        expect(notifier.state.avatarColor, 'Deep Ember');
-      });
-
-      test('user can browse colors without advancing', () {
-        notifier.setAvatarColor('Cornflower');
-
-        expect(notifier.state.avatarColor, 'Cornflower');
-        expect(notifier.state.step, OnboardingStep.avatarColor);
-      });
-
-      test('confirmAvatarColor advances to recoveryEmail', () {
-        notifier.setAvatarColor('Cornflower');
-        notifier.confirmAvatarColor();
-
-        expect(notifier.state.avatarColor, 'Cornflower');
-        expect(notifier.state.step, OnboardingStep.recoveryEmail);
-      });
-
-      test('ignores invalid color', () {
-        notifier.setAvatarColor('Neon Green');
-
-        // Stays on avatarColor step, keeps previous color
-        expect(notifier.state.step, OnboardingStep.avatarColor);
-        expect(notifier.state.avatarColor, 'Deep Ember');
-      });
-    });
-
-    group('recovery email', () {
-      setUp(() async {
-        await advanceTo(OnboardingStep.recoveryEmail);
-      });
-
-      test('setRecoveryEmail saves and advances', () {
-        notifier.setRecoveryEmail('ashe@example.com');
-
-        expect(notifier.state.recoveryEmail, 'ashe@example.com');
-        expect(notifier.state.step, OnboardingStep.contactsPermission);
-      });
-
-      test('skipRecoveryEmail advances without saving', () {
-        notifier.skipRecoveryEmail();
-
-        expect(notifier.state.recoveryEmail, isNull);
         expect(notifier.state.step, OnboardingStep.contactsPermission);
       });
     });
@@ -255,12 +236,13 @@ void main() {
       setUp(() async {
         await advanceTo(OnboardingStep.contactsPermission);
         when(() => authService.createAccount(
+              email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
               displayName: any(named: 'displayName'),
               avatarColor: any(named: 'avatarColor'),
-              recoveryEmail: any(named: 'recoveryEmail'),
             )).thenAnswer((_) async => User(
               id: 'new-id',
+              email: 'ashe@example.com',
               phoneNumber: '+15551234567',
               displayName: 'Ashe',
               avatarColor: 'Deep Ember',
@@ -300,12 +282,13 @@ void main() {
         when(() => contactsService.requestPermission())
             .thenAnswer((_) async => false);
         when(() => authService.createAccount(
+              email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
               displayName: any(named: 'displayName'),
               avatarColor: any(named: 'avatarColor'),
-              recoveryEmail: any(named: 'recoveryEmail'),
             )).thenAnswer((_) async => User(
               id: 'new-id',
+              email: 'ashe@example.com',
               phoneNumber: '+15551234567',
               displayName: 'Ashe',
               avatarColor: 'Deep Ember',
@@ -319,19 +302,18 @@ void main() {
 
       test('deep link arrival skips to pending conversation',
           skip: 'Deep link routing lives in GoRouter, not the notifier. '
-              'Add integration test when router is wired up (step 3).',
+              'Add integration test when router is wired up.',
           () {});
 
       test('createAccount fails, user can retry', () async {
         when(() => contactsService.requestPermission())
             .thenAnswer((_) async => false);
 
-        // First attempt fails
         when(() => authService.createAccount(
+              email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
               displayName: any(named: 'displayName'),
               avatarColor: any(named: 'avatarColor'),
-              recoveryEmail: any(named: 'recoveryEmail'),
             )).thenThrow(Exception('Network error'));
 
         await notifier.requestContactsPermission();
@@ -339,14 +321,14 @@ void main() {
         expect(notifier.state.onboardingComplete, false);
         expect(notifier.state.error, isNotNull);
 
-        // Retry succeeds
         when(() => authService.createAccount(
+              email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
               displayName: any(named: 'displayName'),
               avatarColor: any(named: 'avatarColor'),
-              recoveryEmail: any(named: 'recoveryEmail'),
             )).thenAnswer((_) async => User(
               id: 'new-id',
+              email: 'ashe@example.com',
               phoneNumber: '+15551234567',
               displayName: 'Ashe',
               avatarColor: 'Deep Ember',
@@ -360,12 +342,12 @@ void main() {
       });
 
       test('abandoning mid-flow and relaunching restarts from beginning', () {
-        // A fresh notifier always starts at phoneEntry
         final freshNotifier = OnboardingNotifier(
           authService: authService,
           contactsService: contactsService,
         );
-        expect(freshNotifier.state.step, OnboardingStep.phoneEntry);
+        expect(freshNotifier.state.step, OnboardingStep.emailEntry);
+        expect(freshNotifier.state.email, '');
         expect(freshNotifier.state.phoneNumber, '');
         expect(freshNotifier.state.displayName, '');
       });
@@ -378,12 +360,13 @@ void main() {
         when(() => contactsService.refreshBatchCheck())
             .thenAnswer((_) async {});
         when(() => authService.createAccount(
+              email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
               displayName: any(named: 'displayName'),
               avatarColor: any(named: 'avatarColor'),
-              recoveryEmail: any(named: 'recoveryEmail'),
             )).thenAnswer((_) async => User(
               id: 'new-id',
+              email: 'ashe@example.com',
               phoneNumber: '+15551234567',
               displayName: 'Ashe',
               avatarColor: 'Deep Ember',
@@ -392,9 +375,6 @@ void main() {
 
         await notifier.requestContactsPermission();
 
-        // Verify only contacts permission was requested — no camera or mic.
-        // The notifier has no camera/mic dependency, so there's nothing
-        // to call. This test asserts that the API surface is correct.
         verify(() => contactsService.requestPermission()).called(1);
         verify(() => contactsService.refreshBatchCheck()).called(1);
         verifyNoMoreInteractions(contactsService);
@@ -402,56 +382,47 @@ void main() {
     });
 
     group('back navigation', () {
-      test('goBack from otpVerification returns to phoneEntry', () async {
-        await advanceTo(OnboardingStep.otpVerification);
+      test('goBack from awaitingEmail returns to emailEntry', () async {
+        await advanceTo(OnboardingStep.awaitingEmail);
 
         notifier.goBack();
 
-        expect(notifier.state.step, OnboardingStep.phoneEntry);
+        expect(notifier.state.step, OnboardingStep.emailEntry);
       });
 
-      test('goBack from displayName returns to otpVerification', () async {
+      test('goBack from phoneNumber returns to awaitingEmail', () async {
+        await advanceTo(OnboardingStep.phoneNumber);
+
+        notifier.goBack();
+
+        expect(notifier.state.step, OnboardingStep.awaitingEmail);
+      });
+
+      test('goBack from displayName returns to phoneNumber', () async {
         await advanceTo(OnboardingStep.displayName);
 
         notifier.goBack();
 
-        expect(notifier.state.step, OnboardingStep.otpVerification);
+        expect(notifier.state.step, OnboardingStep.phoneNumber);
       });
 
-      test('goBack from avatarColor returns to displayName', () async {
-        await advanceTo(OnboardingStep.avatarColor);
+      test('goBack from contactsPermission returns to displayName', () async {
+        await advanceTo(OnboardingStep.contactsPermission);
 
         notifier.goBack();
 
         expect(notifier.state.step, OnboardingStep.displayName);
       });
 
-      test('goBack from recoveryEmail returns to avatarColor', () async {
-        await advanceTo(OnboardingStep.recoveryEmail);
-
+      test('goBack from emailEntry stays on emailEntry', () {
         notifier.goBack();
 
-        expect(notifier.state.step, OnboardingStep.avatarColor);
-      });
-
-      test('goBack from contactsPermission returns to recoveryEmail',
-          () async {
-        await advanceTo(OnboardingStep.contactsPermission);
-
-        notifier.goBack();
-
-        expect(notifier.state.step, OnboardingStep.recoveryEmail);
-      });
-
-      test('goBack from phoneEntry stays on phoneEntry', () {
-        notifier.goBack();
-
-        expect(notifier.state.step, OnboardingStep.phoneEntry);
+        expect(notifier.state.step, OnboardingStep.emailEntry);
       });
 
       test('goBack clears error state', () async {
         await advanceTo(OnboardingStep.displayName);
-        notifier.setDisplayName(''); // triggers error
+        notifier.setDisplayName('');
         expect(notifier.state.error, isNotNull);
 
         notifier.goBack();

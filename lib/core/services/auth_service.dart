@@ -8,43 +8,18 @@ class AuthService {
   AuthService({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
 
-  Future<void> sendOtp(String phoneNumber) async {
-    await _client.auth.signInWithOtp(phone: phoneNumber);
-  }
-
-  /// Verifies OTP. Returns existing [app.User] if account exists,
-  /// or null if this is a new user who needs to complete onboarding.
-  Future<app.User?> verifyOtp(String phoneNumber, String otp) async {
-    final response = await _client.auth.verifyOTP(
-      phone: phoneNumber,
-      token: otp,
-      type: OtpType.sms,
+  Future<void> sendMagicLink(String email) async {
+    await _client.auth.signInWithOtp(
+      email: email,
+      emailRedirectTo: 'com.rogermessaging.app://login',
     );
-
-    if (response.user == null) {
-      throw Exception('Verification failed.');
-    }
-
-    // Check if this user already has a public.users row
-    final existing = await _client
-        .from('users')
-        .select()
-        .eq('id', response.user!.id)
-        .maybeSingle();
-
-    if (existing != null) {
-      return _userFromRow(existing);
-    }
-
-    // New user — no public.users row yet
-    return null;
   }
 
   Future<app.User> createAccount({
+    required String email,
     required String phoneNumber,
     required String displayName,
     required String avatarColor,
-    String? recoveryEmail,
   }) async {
     final authUser = _client.auth.currentUser;
     if (authUser == null) {
@@ -53,14 +28,13 @@ class AuthService {
 
     final now = DateTime.now().toUtc().toIso8601String();
 
-    // Insert user row and default settings in parallel
     final userRow = {
       'id': authUser.id,
+      'email': email,
       'phone_number': phoneNumber,
       'display_name': displayName,
       'avatar_color': avatarColor,
-      'email': recoveryEmail,
-      'recovery_email_verified': false,
+      'phone_verified': false,
       'created_at': now,
     };
 
@@ -112,15 +86,20 @@ class AuthService {
     await _client.auth.signOut();
   }
 
-  Future<void> updatePhoneNumber(String newNumber, String otp) async {
-    await _client.auth.verifyOTP(
-      phone: newNumber,
-      token: otp,
-      type: OtpType.sms,
-    );
+  /// Checks if a phone number is already claimed by another account.
+  Future<bool> isPhoneNumberTaken(String phoneNumber) async {
+    final row = await _client
+        .from('users')
+        .select('id')
+        .eq('phone_number', phoneNumber)
+        .maybeSingle();
+    return row != null;
+  }
+
+  Future<void> updatePhoneNumber(String newNumber) async {
     await _client
         .from('users')
-        .update({'phone_number': newNumber})
+        .update({'phone_number': newNumber, 'phone_verified': false})
         .eq('id', _client.auth.currentUser!.id);
   }
 
@@ -138,21 +117,14 @@ class AuthService {
         .eq('id', _client.auth.currentUser!.id);
   }
 
-  Future<void> setRecoveryEmail(String email) async {
-    await _client.from('users').update({
-      'email': email,
-      'recovery_email_verified': false,
-    }).eq('id', _client.auth.currentUser!.id);
-  }
-
   app.User _userFromRow(Map<String, dynamic> row) {
     return app.User(
       id: row['id'] as String,
+      email: row['email'] as String,
       phoneNumber: row['phone_number'] as String,
       displayName: row['display_name'] as String,
       avatarColor: row['avatar_color'] as String,
-      email: row['email'] as String?,
-      recoveryEmailVerified: row['recovery_email_verified'] as bool? ?? false,
+      phoneVerified: row['phone_verified'] as bool? ?? false,
       lastActiveAt: row['last_active_at'] != null
           ? DateTime.parse(row['last_active_at'] as String)
           : null,

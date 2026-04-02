@@ -5,14 +5,14 @@
 -- 1. users
 -- ============================================================
 create table public.users (
-  id                      uuid primary key references auth.users(id) on delete cascade,
-  phone_number            text not null unique,
-  display_name            text not null,
-  avatar_color            text not null,
-  email                   text,
-  recovery_email_verified boolean not null default false,
-  last_active_at          timestamptz,
-  created_at              timestamptz not null default now()
+  id              uuid primary key references auth.users(id) on delete cascade,
+  email           text not null unique,
+  phone_number    text not null unique,
+  display_name    text not null,
+  avatar_color    text not null,
+  phone_verified  boolean not null default false,
+  last_active_at  timestamptz,
+  created_at      timestamptz not null default now()
 );
 
 -- ============================================================
@@ -30,7 +30,7 @@ create table public.conversations (
 create table public.conversation_members (
   id              uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references public.conversations(id) on delete cascade,
-  user_id         uuid not null references public.users(id) on delete set null,
+  user_id         uuid references public.users(id) on delete set null,
   joined_at       timestamptz not null default now(),
   left_at         timestamptz,
   custom_emoji    jsonb,

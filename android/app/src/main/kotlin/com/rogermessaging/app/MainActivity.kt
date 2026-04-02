@@ -1,4 +1,4 @@
-package com.roger.roger
+package com.rogermessaging.app
 
 import io.flutter.embedding.android.FlutterActivity
 

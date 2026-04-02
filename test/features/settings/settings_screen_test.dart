@@ -6,10 +6,6 @@ void main() {
       fail('not implemented');
     });
 
-    test('renders recovery email row', () {
-      fail('not implemented');
-    });
-
     test('renders avatar color row with current swatch', () {
       fail('not implemented');
     });
