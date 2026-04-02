@@ -372,6 +372,9 @@ void main() {
           authServiceProvider.overrideWithValue(authService),
           contactsServiceProvider.overrideWithValue(contactsService),
           randomProvider.overrideWithValue(random),
+          authStateChangesProvider.overrideWith(
+            (ref) => const Stream<AuthState>.empty(),
+          ),
         ]);
         final freshNotifier =
             freshContainer.read(onboardingProvider.notifier);
