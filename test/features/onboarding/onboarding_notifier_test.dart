@@ -195,6 +195,17 @@ void main() {
         expect(notifier.state.phoneNumber, '+15551234567');
         expect(notifier.state.step, OnboardingStep.displayName);
       });
+
+      test('network failure on uniqueness check shows error and stays',
+          () async {
+        when(() => authService.isPhoneNumberTaken(any()))
+            .thenThrow(Exception('Network error'));
+
+        await notifier.submitPhoneNumber('+15551234567');
+
+        expect(notifier.state.step, OnboardingStep.phoneNumber);
+        expect(notifier.state.error, contains('Check your connection'));
+      });
     });
 
     group('display name', () {
@@ -390,12 +401,16 @@ void main() {
         expect(notifier.state.step, OnboardingStep.emailEntry);
       });
 
-      test('goBack from phoneNumber returns to awaitingEmail', () async {
+      test('goBack from phoneNumber returns to emailEntry and signs out',
+          () async {
         await advanceTo(OnboardingStep.phoneNumber);
+
+        when(() => authService.signOut()).thenAnswer((_) async {});
 
         notifier.goBack();
 
-        expect(notifier.state.step, OnboardingStep.awaitingEmail);
+        expect(notifier.state.step, OnboardingStep.emailEntry);
+        verify(() => authService.signOut()).called(1);
       });
 
       test('goBack from displayName returns to phoneNumber', () async {

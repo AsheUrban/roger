@@ -69,7 +69,7 @@ create index idx_messages_sender on public.messages(sender_id);
 create table public.message_views (
   id            uuid primary key default gen_random_uuid(),
   message_id    uuid not null references public.messages(id) on delete cascade,
-  user_id       uuid not null references public.users(id) on delete set null,
+  user_id       uuid references public.users(id) on delete set null,
   downloaded_at timestamptz not null default now(),
   viewed_at     timestamptz,
 

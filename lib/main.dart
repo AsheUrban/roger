@@ -29,7 +29,7 @@ final _router = GoRouter(
         .maybeSingle();
 
     if (userRow == null) {
-      // OTP verified but account creation never finished
+      // Magic link verified but account creation never finished
       return isOnboarding ? null : '/onboarding';
     }
 

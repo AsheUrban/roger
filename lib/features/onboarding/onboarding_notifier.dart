@@ -36,10 +36,17 @@ class OnboardingNotifier {
     final previous = switch (state.step) {
       OnboardingStep.emailEntry => OnboardingStep.emailEntry,
       OnboardingStep.awaitingEmail => OnboardingStep.emailEntry,
-      OnboardingStep.phoneNumber => OnboardingStep.awaitingEmail,
+      OnboardingStep.phoneNumber => OnboardingStep.emailEntry,
       OnboardingStep.displayName => OnboardingStep.phoneNumber,
       OnboardingStep.contactsPermission => OnboardingStep.displayName,
     };
+
+    // If going back from post-auth steps to email entry, sign out
+    if (state.step == OnboardingStep.phoneNumber &&
+        previous == OnboardingStep.emailEntry) {
+      _authService.signOut();
+    }
+
     state = state.copyWith(step: previous, error: () => null);
   }
 
@@ -151,11 +158,10 @@ class OnboardingNotifier {
         isLoading: false,
       );
     } catch (e) {
-      // Network failure — allow through, createAccount will catch duplicates
       state = state.copyWith(
-        phoneNumber: trimmed,
-        step: OnboardingStep.displayName,
         isLoading: false,
+        error: () => 'Could not verify phone number. '
+            'Check your connection and try again.',
       );
     }
   }
