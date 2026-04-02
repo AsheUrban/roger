@@ -22,6 +22,12 @@ build/
 Thumbs.db
 .DS_Store
 
+# Unused platform targets (mobile only)
+web/
+linux/
+macos/
+windows/
+
 # Environment
 .env
 .env.local

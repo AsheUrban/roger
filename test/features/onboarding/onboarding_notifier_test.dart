@@ -1,10 +1,13 @@
 import 'dart:math';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:roger/core/models/user.dart';
+import 'package:roger/core/providers.dart';
 import 'package:roger/core/services/auth_service.dart';
 import 'package:roger/core/services/contacts_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:roger/features/onboarding/onboarding_notifier.dart';
 import 'package:roger/features/onboarding/onboarding_state.dart';
 
@@ -16,6 +19,7 @@ void main() {
   late MockAuthService authService;
   late MockContactsService contactsService;
   late MockRandom random;
+  late ProviderContainer container;
   late OnboardingNotifier notifier;
 
   setUp(() {
@@ -24,11 +28,21 @@ void main() {
     random = MockRandom();
     // Default: random returns index 2 → 'Deep Ember'
     when(() => random.nextInt(any())).thenReturn(2);
-    notifier = OnboardingNotifier(
-      authService: authService,
-      contactsService: contactsService,
-      random: random,
-    );
+
+    container = ProviderContainer(overrides: [
+      authServiceProvider.overrideWithValue(authService),
+      contactsServiceProvider.overrideWithValue(contactsService),
+      randomProvider.overrideWithValue(random),
+      authStateChangesProvider.overrideWith(
+        (ref) => const Stream<AuthState>.empty(),
+      ),
+    ]);
+
+    notifier = container.read(onboardingProvider.notifier);
+  });
+
+  tearDown(() {
+    container.dispose();
   });
 
   /// Helper: advance notifier to a given step with valid state
@@ -353,14 +367,19 @@ void main() {
       });
 
       test('abandoning mid-flow and relaunching restarts from beginning', () {
-        final freshNotifier = OnboardingNotifier(
-          authService: authService,
-          contactsService: contactsService,
-        );
+        // A fresh container always starts at emailEntry
+        final freshContainer = ProviderContainer(overrides: [
+          authServiceProvider.overrideWithValue(authService),
+          contactsServiceProvider.overrideWithValue(contactsService),
+          randomProvider.overrideWithValue(random),
+        ]);
+        final freshNotifier =
+            freshContainer.read(onboardingProvider.notifier);
         expect(freshNotifier.state.step, OnboardingStep.emailEntry);
         expect(freshNotifier.state.email, '');
         expect(freshNotifier.state.phoneNumber, '');
         expect(freshNotifier.state.displayName, '');
+        freshContainer.dispose();
       });
 
       test(

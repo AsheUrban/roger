@@ -10,66 +10,68 @@ import 'features/settings/settings_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/camera/camera_screen.dart';
 
-final _router = GoRouter(
-  initialLocation: '/conversations',
-  redirect: (context, state) async {
-    final session = Supabase.instance.client.auth.currentSession;
-    final isOnboarding = state.uri.path == '/onboarding';
+final routerProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    initialLocation: '/conversations',
+    redirect: (context, state) async {
+      final session = Supabase.instance.client.auth.currentSession;
+      final isOnboarding = state.uri.path == '/onboarding';
 
-    // Not authenticated → must onboard
-    if (session == null) {
-      return isOnboarding ? null : '/onboarding';
-    }
+      // Not authenticated → must onboard
+      if (session == null) {
+        return isOnboarding ? null : '/onboarding';
+      }
 
-    // Authenticated — check if account creation completed
-    final userRow = await Supabase.instance.client
-        .from('users')
-        .select('id')
-        .eq('id', session.user.id)
-        .maybeSingle();
+      // Authenticated — check if account creation completed
+      final userRow = await Supabase.instance.client
+          .from('users')
+          .select('id')
+          .eq('id', session.user.id)
+          .maybeSingle();
 
-    if (userRow == null) {
-      // Magic link verified but account creation never finished
-      return isOnboarding ? null : '/onboarding';
-    }
+      if (userRow == null) {
+        // Magic link verified but account creation never finished
+        return isOnboarding ? null : '/onboarding';
+      }
 
-    // Fully onboarded — don't let them back to onboarding
-    if (isOnboarding) {
-      return '/conversations';
-    }
+      // Fully onboarded — don't let them back to onboarding
+      if (isOnboarding) {
+        return '/conversations';
+      }
 
-    return null;
-  },
-  routes: [
-    GoRoute(
-      path: '/onboarding',
-      builder: (context, state) => const OnboardingScreen(),
-    ),
-    ShellRoute(
-      builder: (context, state, child) => _RogerShell(child: child),
-      routes: [
-        GoRoute(
-          path: '/conversations',
-          builder: (context, state) => const ConversationsScreen(),
-        ),
-        GoRoute(
-          path: '/search',
-          builder: (context, state) => const SearchScreen(),
-        ),
-        GoRoute(
-          path: '/settings',
-          builder: (context, state) => const SettingsScreen(),
-        ),
-      ],
-    ),
-    GoRoute(
-      path: '/camera/:conversationId',
-      builder: (context, state) => CameraScreen(
-        conversationId: state.pathParameters['conversationId']!,
+      return null;
+    },
+    routes: [
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => const OnboardingScreen(),
       ),
-    ),
-  ],
-);
+      ShellRoute(
+        builder: (context, state, child) => _RogerShell(child: child),
+        routes: [
+          GoRoute(
+            path: '/conversations',
+            builder: (context, state) => const ConversationsScreen(),
+          ),
+          GoRoute(
+            path: '/search',
+            builder: (context, state) => const SearchScreen(),
+          ),
+          GoRoute(
+            path: '/settings',
+            builder: (context, state) => const SettingsScreen(),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/camera/:conversationId',
+        builder: (context, state) => CameraScreen(
+          conversationId: state.pathParameters['conversationId']!,
+        ),
+      ),
+    ],
+  );
+});
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -85,14 +87,16 @@ Future<void> main() async {
   runApp(const ProviderScope(child: RogerApp()));
 }
 
-class RogerApp extends StatelessWidget {
+class RogerApp extends ConsumerWidget {
   const RogerApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+
     return MaterialApp.router(
       title: 'roger',
-      routerConfig: _router,
+      routerConfig: router,
     );
   }
 }

@@ -1,7 +1,13 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'settings_state.dart';
 
-class SettingsNotifier {
-  SettingsState state = const SettingsState();
+final settingsProvider =
+    NotifierProvider<SettingsNotifier, SettingsState>(SettingsNotifier.new);
+
+class SettingsNotifier extends Notifier<SettingsState> {
+  @override
+  SettingsState build() => const SettingsState();
 
   Future<void> loadSettings() async {}
   Future<void> updateDisplayName(String name) async {}

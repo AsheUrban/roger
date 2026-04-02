@@ -1,5 +1,9 @@
 import 'dart:math';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../core/providers.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/contacts_service.dart';
 import 'onboarding_state.dart';
@@ -16,21 +20,35 @@ const avatarColors = [
   'Charcoal',
 ];
 
-class OnboardingNotifier {
-  final AuthService _authService;
-  final ContactsService _contactsService;
-  final Random _random;
-  OnboardingState state = const OnboardingState();
+final onboardingProvider =
+    NotifierProvider<OnboardingNotifier, OnboardingState>(
+  OnboardingNotifier.new,
+);
 
-  OnboardingNotifier({
-    required AuthService authService,
-    required ContactsService contactsService,
-    Random? random,
-  })  : _authService = authService,
-        _contactsService = contactsService,
-        _random = random ?? Random();
+class OnboardingNotifier extends Notifier<OnboardingState> {
+  late final AuthService _authService;
+  late final ContactsService _contactsService;
+  late final Random _random;
 
   static final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+  @override
+  OnboardingState build() {
+    _authService = ref.read(authServiceProvider);
+    _contactsService = ref.read(contactsServiceProvider);
+    _random = ref.read(randomProvider);
+
+    // Listen for magic link callback via provider
+    ref.listen<AsyncValue<AuthState>>(authStateChangesProvider, (prev, next) {
+      next.whenData((authState) {
+        if (authState.event == AuthChangeEvent.signedIn) {
+          onAuthStateChanged();
+        }
+      });
+    });
+
+    return const OnboardingState();
+  }
 
   void goBack() {
     final previous = switch (state.step) {

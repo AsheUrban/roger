@@ -1,9 +1,16 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'camera_state.dart';
 
-class CameraNotifier {
-  CameraState state = const CameraState(conversationId: '');
+final cameraProvider =
+    NotifierProvider.family<CameraNotifier, CameraState, String>(
+  CameraNotifier.new,
+);
 
-  Future<void> loadConversation(String conversationId) async {}
+class CameraNotifier extends FamilyNotifier<CameraState, String> {
+  @override
+  CameraState build(String arg) => CameraState(conversationId: arg);
+
   Future<void> startRecording() async {}
   Future<void> stopRecording() async {}
   Future<void> takePhoto() async {}

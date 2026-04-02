@@ -1,11 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/services/auth_service.dart';
-import '../../core/services/contacts_service.dart';
 import 'onboarding_notifier.dart';
 import 'onboarding_state.dart';
 
@@ -16,53 +12,18 @@ const _warmWhite = Color(0xFFFAFAF5);
 // Error text: warm white at 70% — salmon is reserved for camera actions only
 const _errorColor = Color(0xB3FAFAF5);
 
-class OnboardingScreen extends StatefulWidget {
+class OnboardingScreen extends ConsumerWidget {
   const OnboardingScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(onboardingProvider);
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
-  late final OnboardingNotifier _notifier;
-  late final StreamSubscription<AuthState> _authSub;
-
-  @override
-  void initState() {
-    super.initState();
-    _notifier = OnboardingNotifier(
-      authService: AuthService(),
-      contactsService: ContactsService(),
-    );
-
-    // Listen for magic link callback
-    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-      if (data.event == AuthChangeEvent.signedIn) {
-        _notifier.onAuthStateChanged().then((_) {
-          if (mounted) setState(() {});
-        });
+    ref.listen<OnboardingState>(onboardingProvider, (prev, next) {
+      if (next.onboardingComplete) {
+        context.go('/search');
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _authSub.cancel();
-    super.dispose();
-  }
-
-  void _rebuild() => setState(() {});
-
-  @override
-  Widget build(BuildContext context) {
-    final state = _notifier.state;
-
-    // Navigate away when onboarding completes
-    if (state.onboardingComplete) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.go('/search');
-      });
-    }
 
     return Scaffold(
       backgroundColor: _charcoal,
@@ -70,26 +31,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
           child: switch (state.step) {
-            OnboardingStep.emailEntry => _EmailEntryStep(
-                notifier: _notifier,
-                onChanged: _rebuild,
-              ),
-            OnboardingStep.awaitingEmail => _AwaitingEmailStep(
-                notifier: _notifier,
-                onChanged: _rebuild,
-              ),
-            OnboardingStep.phoneNumber => _PhoneNumberStep(
-                notifier: _notifier,
-                onChanged: _rebuild,
-              ),
-            OnboardingStep.displayName => _DisplayNameStep(
-                notifier: _notifier,
-                onChanged: _rebuild,
-              ),
-            OnboardingStep.contactsPermission => _ContactsPermissionStep(
-                notifier: _notifier,
-                onChanged: _rebuild,
-              ),
+            OnboardingStep.emailEntry => const _EmailEntryStep(),
+            OnboardingStep.awaitingEmail => const _AwaitingEmailStep(),
+            OnboardingStep.phoneNumber => const _PhoneNumberStep(),
+            OnboardingStep.displayName => const _DisplayNameStep(),
+            OnboardingStep.contactsPermission =>
+              const _ContactsPermissionStep(),
           },
         ),
       ),
@@ -100,17 +47,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 // ============================================================
 // Email Entry (no back button — this is the first step)
 // ============================================================
-class _EmailEntryStep extends StatefulWidget {
-  final OnboardingNotifier notifier;
-  final VoidCallback onChanged;
-
-  const _EmailEntryStep({required this.notifier, required this.onChanged});
+class _EmailEntryStep extends ConsumerStatefulWidget {
+  const _EmailEntryStep();
 
   @override
-  State<_EmailEntryStep> createState() => _EmailEntryStepState();
+  ConsumerState<_EmailEntryStep> createState() => _EmailEntryStepState();
 }
 
-class _EmailEntryStepState extends State<_EmailEntryStep> {
+class _EmailEntryStepState extends ConsumerState<_EmailEntryStep> {
   final _controller = TextEditingController();
 
   @override
@@ -121,7 +65,7 @@ class _EmailEntryStepState extends State<_EmailEntryStep> {
 
   @override
   Widget build(BuildContext context) {
-    final state = widget.notifier.state;
+    final state = ref.watch(onboardingProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -157,9 +101,10 @@ class _EmailEntryStepState extends State<_EmailEntryStep> {
         _PrimaryButton(
           label: 'Continue',
           isLoading: state.isLoading,
-          onPressed: () async {
-            await widget.notifier.sendMagicLink(_controller.text);
-            widget.onChanged();
+          onPressed: () {
+            ref.read(onboardingProvider.notifier).sendMagicLink(
+                  _controller.text,
+                );
           },
         ),
         const Spacer(flex: 2),
@@ -171,28 +116,18 @@ class _EmailEntryStepState extends State<_EmailEntryStep> {
 // ============================================================
 // Awaiting Email (magic link sent, waiting for user to tap it)
 // ============================================================
-class _AwaitingEmailStep extends StatelessWidget {
-  final OnboardingNotifier notifier;
-  final VoidCallback onChanged;
-
-  const _AwaitingEmailStep({
-    required this.notifier,
-    required this.onChanged,
-  });
+class _AwaitingEmailStep extends ConsumerWidget {
+  const _AwaitingEmailStep();
 
   @override
-  Widget build(BuildContext context) {
-    final state = notifier.state;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(onboardingProvider);
+    final notifier = ref.read(onboardingProvider.notifier);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _BackButton(
-          onPressed: () {
-            notifier.goBack();
-            onChanged();
-          },
-        ),
+        _BackButton(onPressed: notifier.goBack),
         const Spacer(),
         const Text(
           'Check your email',
@@ -230,12 +165,7 @@ class _AwaitingEmailStep extends StatelessWidget {
         ],
         const SizedBox(height: 32),
         TextButton(
-          onPressed: state.isLoading
-              ? null
-              : () async {
-                  await notifier.resendMagicLink();
-                  onChanged();
-                },
+          onPressed: state.isLoading ? null : notifier.resendMagicLink,
           child: const Text(
             'Resend email',
             style: TextStyle(color: _warmWhite),
@@ -250,17 +180,14 @@ class _AwaitingEmailStep extends StatelessWidget {
 // ============================================================
 // Phone Number
 // ============================================================
-class _PhoneNumberStep extends StatefulWidget {
-  final OnboardingNotifier notifier;
-  final VoidCallback onChanged;
-
-  const _PhoneNumberStep({required this.notifier, required this.onChanged});
+class _PhoneNumberStep extends ConsumerStatefulWidget {
+  const _PhoneNumberStep();
 
   @override
-  State<_PhoneNumberStep> createState() => _PhoneNumberStepState();
+  ConsumerState<_PhoneNumberStep> createState() => _PhoneNumberStepState();
 }
 
-class _PhoneNumberStepState extends State<_PhoneNumberStep> {
+class _PhoneNumberStepState extends ConsumerState<_PhoneNumberStep> {
   final _controller = TextEditingController();
 
   @override
@@ -271,17 +198,13 @@ class _PhoneNumberStepState extends State<_PhoneNumberStep> {
 
   @override
   Widget build(BuildContext context) {
-    final state = widget.notifier.state;
+    final state = ref.watch(onboardingProvider);
+    final notifier = ref.read(onboardingProvider.notifier);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _BackButton(
-          onPressed: () {
-            widget.notifier.goBack();
-            widget.onChanged();
-          },
-        ),
+        _BackButton(onPressed: notifier.goBack),
         const Spacer(),
         const Text(
           'Your phone number',
@@ -318,9 +241,8 @@ class _PhoneNumberStepState extends State<_PhoneNumberStep> {
         _PrimaryButton(
           label: 'Continue',
           isLoading: state.isLoading,
-          onPressed: () async {
-            await widget.notifier.submitPhoneNumber(_controller.text);
-            widget.onChanged();
+          onPressed: () {
+            notifier.submitPhoneNumber(_controller.text);
           },
         ),
         const Spacer(flex: 2),
@@ -332,17 +254,14 @@ class _PhoneNumberStepState extends State<_PhoneNumberStep> {
 // ============================================================
 // Display Name
 // ============================================================
-class _DisplayNameStep extends StatefulWidget {
-  final OnboardingNotifier notifier;
-  final VoidCallback onChanged;
-
-  const _DisplayNameStep({required this.notifier, required this.onChanged});
+class _DisplayNameStep extends ConsumerStatefulWidget {
+  const _DisplayNameStep();
 
   @override
-  State<_DisplayNameStep> createState() => _DisplayNameStepState();
+  ConsumerState<_DisplayNameStep> createState() => _DisplayNameStepState();
 }
 
-class _DisplayNameStepState extends State<_DisplayNameStep> {
+class _DisplayNameStepState extends ConsumerState<_DisplayNameStep> {
   final _controller = TextEditingController();
 
   @override
@@ -353,17 +272,13 @@ class _DisplayNameStepState extends State<_DisplayNameStep> {
 
   @override
   Widget build(BuildContext context) {
-    final state = widget.notifier.state;
+    final state = ref.watch(onboardingProvider);
+    final notifier = ref.read(onboardingProvider.notifier);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _BackButton(
-          onPressed: () {
-            widget.notifier.goBack();
-            widget.onChanged();
-          },
-        ),
+        _BackButton(onPressed: notifier.goBack),
         const Spacer(),
         const Text(
           'What should people\ncall you?',
@@ -392,8 +307,7 @@ class _DisplayNameStepState extends State<_DisplayNameStep> {
         _PrimaryButton(
           label: 'Continue',
           onPressed: () {
-            widget.notifier.setDisplayName(_controller.text);
-            widget.onChanged();
+            notifier.setDisplayName(_controller.text);
           },
         ),
         const Spacer(flex: 2),
@@ -405,28 +319,18 @@ class _DisplayNameStepState extends State<_DisplayNameStep> {
 // ============================================================
 // Contacts Permission
 // ============================================================
-class _ContactsPermissionStep extends StatelessWidget {
-  final OnboardingNotifier notifier;
-  final VoidCallback onChanged;
-
-  const _ContactsPermissionStep({
-    required this.notifier,
-    required this.onChanged,
-  });
+class _ContactsPermissionStep extends ConsumerWidget {
+  const _ContactsPermissionStep();
 
   @override
-  Widget build(BuildContext context) {
-    final state = notifier.state;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(onboardingProvider);
+    final notifier = ref.read(onboardingProvider.notifier);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _BackButton(
-          onPressed: () {
-            notifier.goBack();
-            onChanged();
-          },
-        ),
+        _BackButton(onPressed: notifier.goBack),
         const Spacer(),
         const Text(
           'Find your people',
@@ -447,19 +351,11 @@ class _ContactsPermissionStep extends StatelessWidget {
         _PrimaryButton(
           label: 'Allow contacts',
           isLoading: state.isLoading,
-          onPressed: () async {
-            await notifier.requestContactsPermission();
-            onChanged();
-          },
+          onPressed: notifier.requestContactsPermission,
         ),
         const SizedBox(height: 12),
         TextButton(
-          onPressed: state.isLoading
-              ? null
-              : () async {
-                  await notifier.skipContactsPermission();
-                  onChanged();
-                },
+          onPressed: state.isLoading ? null : notifier.skipContactsPermission,
           child: const Text(
             'Not now',
             style: TextStyle(color: _warmWhite),
