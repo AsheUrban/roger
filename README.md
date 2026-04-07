@@ -1,6 +1,6 @@
 # roger
 
-Async video messaging for people you actually talk to.
+Async video messaging for people you want to talk "face-to-face" with.
 
 ---
 
