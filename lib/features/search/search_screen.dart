@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme/colors.dart';
+import '../../core/utils/time_format.dart';
 import 'search_notifier.dart';
 import 'search_state.dart';
 
@@ -188,12 +189,10 @@ class _SearchResultRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Display Name Resolution: contact name first, self-chosen name as fallback
-    final displayName = result.contactName.isNotEmpty
-        ? result.contactName
-        : result.rogerUser?.displayName ?? '';
-
-    final initials = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+    // Name Resolution: contact name only — '?' if unknown
+    final displayName =
+        result.contactName.isNotEmpty ? result.contactName : '?';
+    final initials = displayName != '?' ? displayName[0].toUpperCase() : '?';
 
     final avatarColorName = result.rogerUser?.avatarColor ?? 'Charcoal';
     final colors = avatarColorMap[avatarColorName] ?? (charcoal2, warmWhite);
@@ -244,7 +243,7 @@ class _SearchResultRow extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
-                        _formatLastActive(result.rogerUser!.lastActiveAt!),
+                        formatLastActive(result.rogerUser!.lastActiveAt!),
                         style: TextStyle(
                           fontSize: 12,
                           color: warmWhite.withValues(alpha: 0.4),
@@ -301,18 +300,6 @@ class _SearchResultRow extends StatelessWidget {
     );
   }
 
-  /// Format last active as relative timestamp per spec:
-  /// "active 2m ago", "active 1h ago", "active yesterday" — never a specific clock time.
-  String _formatLastActive(DateTime lastActive) {
-    final now = DateTime.now();
-    final diff = now.difference(lastActive);
-
-    if (diff.inMinutes < 1) return 'active now';
-    if (diff.inMinutes < 60) return 'active ${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return 'active ${diff.inHours}h ago';
-    if (diff.inDays == 1) return 'active yesterday';
-    return 'active ${diff.inDays}d ago';
-  }
 }
 
 class _EmptyState extends StatelessWidget {

@@ -240,6 +240,28 @@ void main() {
         final state = container.read(searchProvider);
         expect(state.query, 'cas');
       });
+
+      test('does not match by roger display name — contact name only',
+          () async {
+        // Contact saved as 'J-Dog', but their roger displayName is 'Jordan B'.
+        // April 7 decision: filter matches contact name only, not server display name.
+        when(() => contactsService.cachedContacts).thenReturn([
+          (name: 'J-Dog', phoneNumber: '+15551111111'),
+        ]);
+        when(() => contactsService.cachedRogerUsers).thenReturn([_testUser1]);
+        await notifier.loadInitialContacts();
+
+        // Searching by roger displayName should return nothing
+        await notifier.search('Jordan');
+        expect(container.read(searchProvider).results, isEmpty,
+            reason: 'Filter must match contact name only, not server display name');
+
+        // Searching by contact name should return the result
+        await notifier.search('J-Dog');
+        final state = container.read(searchProvider);
+        expect(state.results.length, 1);
+        expect(state.results.first.contactName, 'J-Dog');
+      });
     });
 
     group('contacts permission', () {

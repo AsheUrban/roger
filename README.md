@@ -68,7 +68,7 @@ Video calls are end-to-end encrypted natively.
 | Encryption | `cryptography` / `libsodium_dart` |
 | Key Storage | iCloud Keychain (iOS) · Android Keystore (Android) |
 | State Management | Riverpod |
-| Local Storage | drift / sqflite |
+| Local Storage | drift (SQLite, SQLCipher-encrypted) |
 
 ---
 

@@ -17,7 +17,7 @@ This policy explains what information we do collect, why, and how it is handled.
 
 ### Information You Provide
 
-**Account information.** When you create an account, we collect your email address, phone number, and display name. Your email address is used for authentication and account recovery — it is never displayed to other users or used for marketing. Your phone number is how people in your contacts find you on roger. Your display name is visible to people you message.
+**Account information.** When you create an account, we collect your email address, phone number, and display name. Your email address is used for authentication and account recovery — it is never displayed to other users or used for marketing. Your phone number is how people in your contacts find you on roger. Your display name is stored in your profile and visible only to you on your Settings screen — other users see you by whatever name they have you saved as in their own device contacts.
 
 **Messages.** Videos, photos, notes, and live call recordings are encrypted on your device before transmission. We store and deliver encrypted ciphertext only. We cannot decrypt or access your message content at any point.
 
@@ -41,7 +41,7 @@ When you grant contacts permission, roger hashes your contacts' phone numbers on
 |---|---|
 | Email address | Authentication and account recovery |
 | Phone number | Contact discovery |
-| Display name | Shown to conversation members |
+| Display name | Stored in your profile for your own Settings screen — not shown to other users |
 | Encrypted message content | Delivery to recipients via Cloudflare R2 |
 | Device tokens | Push notification delivery |
 | Hashed contact numbers | Contact discovery — checked against registered users, not stored |
