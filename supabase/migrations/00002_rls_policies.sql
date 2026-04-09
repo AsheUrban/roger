@@ -23,7 +23,7 @@ $$;
 -- ============================================================
 alter table public.users enable row level security;
 
--- Any authenticated user can read any user row (needed for display names, avatars, presence)
+-- Any authenticated user can read any user row (needed for avatars, presence, contact discovery)
 create policy "users: select for authenticated"
   on public.users for select
   to authenticated

@@ -101,7 +101,7 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
         final otherRows = await _client
             .from('conversation_members')
             .select(
-                'id, users(id, email, phone_number, display_name, avatar_color, phone_verified, last_active_at, created_at)')
+                'id, users(id, email, phone_number, avatar_color, phone_verified, last_active_at, created_at)')
             .eq('conversation_id', convId)
             .or('user_id.neq.$currentUserId,user_id.is.null')
             .isFilter('left_at', null);
@@ -139,7 +139,7 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
           }
         }
 
-        // Resolve deleted member display names from drift cache
+        // Resolve deleted member names from drift cache
         final deletedNames = <String>[];
         for (final memberId in deletedMemberIds) {
           final phone = await dao.getPhoneNumber(memberId);

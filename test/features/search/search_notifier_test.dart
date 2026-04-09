@@ -17,7 +17,6 @@ final _testUser1 = User(
   id: 'user-1',
   email: 'jordan@example.com',
   phoneNumber: '+15551111111',
-  displayName: 'Jordan B',
   avatarColor: 'Rust',
   createdAt: DateTime(2026, 1, 1),
 );
@@ -26,7 +25,6 @@ final _testUser2 = User(
   id: 'user-2',
   email: 'casey@example.com',
   phoneNumber: '+15552222222',
-  displayName: 'Casey L',
   avatarColor: 'Cornflower',
   createdAt: DateTime(2026, 1, 1),
 );
@@ -149,7 +147,6 @@ void main() {
           id: 'current-user-id',
           email: 'me@example.com',
           phoneNumber: '+15550000000',
-          displayName: 'Me',
           avatarColor: 'Charcoal',
           createdAt: DateTime(2026, 1, 1),
         );
@@ -241,20 +238,19 @@ void main() {
         expect(state.query, 'cas');
       });
 
-      test('does not match by roger display name — contact name only',
+      test('filters by contact name only — not by other user data',
           () async {
-        // Contact saved as 'J-Dog', but their roger displayName is 'Jordan B'.
-        // April 7 decision: filter matches contact name only, not server display name.
+        // Contact saved as 'J-Dog'. Filter matches contact name only.
         when(() => contactsService.cachedContacts).thenReturn([
           (name: 'J-Dog', phoneNumber: '+15551111111'),
         ]);
         when(() => contactsService.cachedRogerUsers).thenReturn([_testUser1]);
         await notifier.loadInitialContacts();
 
-        // Searching by roger displayName should return nothing
+        // Searching by a name not in contacts should return nothing
         await notifier.search('Jordan');
         expect(container.read(searchProvider).results, isEmpty,
-            reason: 'Filter must match contact name only, not server display name');
+            reason: 'Filter must match contact name only');
 
         // Searching by contact name should return the result
         await notifier.search('J-Dog');

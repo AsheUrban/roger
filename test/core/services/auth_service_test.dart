@@ -19,7 +19,7 @@ void main() {
     });
 
     group('createAccount', () {
-      test('requires email, phone number, display name, and avatar color', () {
+      test('requires email, phone number, and avatar color', () {
         fail('not implemented');
       });
 

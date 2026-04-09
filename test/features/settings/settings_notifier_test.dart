@@ -6,10 +6,6 @@ void main() {
       fail('not implemented');
     });
 
-    test('updateDisplayName persists new name', () {
-      fail('not implemented');
-    });
-
     test('updatePhoneNumber updates number directly (no OTP at MVP)', () {
       fail('not implemented');
     });

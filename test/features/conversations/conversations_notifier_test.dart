@@ -38,7 +38,6 @@ final _otherUser = User(
   id: 'other-user',
   email: 'other@example.com',
   phoneNumber: '+15551111111',
-  displayName: 'Other',
   avatarColor: 'Rust',
   createdAt: DateTime(2026, 1, 1),
 );

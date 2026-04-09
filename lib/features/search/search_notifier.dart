@@ -237,7 +237,7 @@ class SearchNotifier extends Notifier<SearchState> {
       // Skip showing yourself
       if (rogerUser != null && rogerUser.id == _currentUserId) continue;
 
-      // Apply local text filter — contact name only, never server display name
+      // Apply local text filter — contact name only
       if (filter != null && filter.isNotEmpty) {
         final q = filter.toLowerCase();
         final nameMatch = contact.name.toLowerCase().contains(q);

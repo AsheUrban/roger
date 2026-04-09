@@ -17,7 +17,6 @@ final _rogerUser = User(
   id: 'user-1',
   email: 'jordan@example.com',
   phoneNumber: '+15551111111',
-  displayName: 'Jordan B',
   avatarColor: 'Rust',
   lastActiveAt: DateTime.now().subtract(const Duration(minutes: 2)),
   createdAt: DateTime(2026, 1, 1),
