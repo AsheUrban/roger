@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config/env.dart';
+import 'core/database/app_database.dart';
 import 'core/providers.dart';
+import 'core/services/database_key_service.dart';
 import 'features/conversations/conversations_screen.dart';
 import 'features/search/search_screen.dart';
 import 'features/settings/settings_screen.dart';
@@ -103,7 +105,15 @@ Future<void> main() async {
     ),
   );
 
-  runApp(const ProviderScope(child: RogerApp()));
+  final dbKey = await DatabaseKeyService().getOrCreateKey();
+  final db = await openAppDatabase(dbKey);
+
+  runApp(ProviderScope(
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+    ],
+    child: const RogerApp(),
+  ));
 }
 
 class RogerApp extends ConsumerWidget {

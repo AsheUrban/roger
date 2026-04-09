@@ -64,10 +64,6 @@ void main() {
     when(() => authService.isPhoneNumberTaken(any()))
         .thenAnswer((_) async => false);
     await notifier.submitPhoneNumber('+15551234567');
-
-    if (target == OnboardingStep.displayName) return;
-
-    notifier.setDisplayName('Ashe');
   }
 
   group('OnboardingNotifier', () {
@@ -134,7 +130,6 @@ void main() {
               id: 'existing-id',
               email: 'ashe@example.com',
               phoneNumber: '+15551234567',
-              displayName: 'Existing',
               avatarColor: 'Rust',
               createdAt: DateTime.now(),
             ));
@@ -171,7 +166,7 @@ void main() {
         await advanceTo(OnboardingStep.phoneNumber);
       });
 
-      test('submitPhoneNumber stores value and advances to displayName',
+      test('submitPhoneNumber stores value and advances to contactsPermission',
           () async {
         when(() => authService.isPhoneNumberTaken('+15551234567'))
             .thenAnswer((_) async => false);
@@ -179,7 +174,7 @@ void main() {
         await notifier.submitPhoneNumber('+15551234567');
 
         expect(notifier.state.phoneNumber, '+15551234567');
-        expect(notifier.state.step, OnboardingStep.displayName);
+        expect(notifier.state.step, OnboardingStep.contactsPermission);
       });
 
       test('rejects empty phone number', () async {
@@ -207,7 +202,7 @@ void main() {
         await notifier.submitPhoneNumber('  +15551234567  ');
 
         expect(notifier.state.phoneNumber, '+15551234567');
-        expect(notifier.state.step, OnboardingStep.displayName);
+        expect(notifier.state.step, OnboardingStep.contactsPermission);
       });
 
       test('network failure on uniqueness check shows error and stays',
@@ -222,54 +217,17 @@ void main() {
       });
     });
 
-    group('display name', () {
-      setUp(() async {
-        await advanceTo(OnboardingStep.displayName);
-      });
-
-      test('accepts any non-empty string up to 50 characters', () {
-        notifier.setDisplayName('Ashe');
-
-        expect(notifier.state.displayName, 'Ashe');
-        expect(notifier.state.step, OnboardingStep.contactsPermission);
-        expect(notifier.state.error, isNull);
-      });
-
-      test('rejects empty string', () {
-        notifier.setDisplayName('');
-
-        expect(notifier.state.step, OnboardingStep.displayName);
-        expect(notifier.state.error, isNotNull);
-      });
-
-      test('rejects string over 50 characters', () {
-        notifier.setDisplayName('A' * 51);
-
-        expect(notifier.state.step, OnboardingStep.displayName);
-        expect(notifier.state.error, isNotNull);
-      });
-
-      test('trims whitespace', () {
-        notifier.setDisplayName('  Ashe  ');
-
-        expect(notifier.state.displayName, 'Ashe');
-        expect(notifier.state.step, OnboardingStep.contactsPermission);
-      });
-    });
-
     group('contacts permission', () {
       setUp(() async {
         await advanceTo(OnboardingStep.contactsPermission);
         when(() => authService.createAccount(
               email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
-              displayName: any(named: 'displayName'),
               avatarColor: any(named: 'avatarColor'),
             )).thenAnswer((_) async => User(
               id: 'new-id',
               email: 'ashe@example.com',
               phoneNumber: '+15551234567',
-              displayName: 'Ashe',
               avatarColor: 'Deep Ember',
               createdAt: DateTime.now(),
             ));
@@ -309,13 +267,11 @@ void main() {
         when(() => authService.createAccount(
               email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
-              displayName: any(named: 'displayName'),
               avatarColor: any(named: 'avatarColor'),
             )).thenAnswer((_) async => User(
               id: 'new-id',
               email: 'ashe@example.com',
               phoneNumber: '+15551234567',
-              displayName: 'Ashe',
               avatarColor: 'Deep Ember',
               createdAt: DateTime.now(),
             ));
@@ -335,7 +291,6 @@ void main() {
         when(() => authService.createAccount(
               email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
-              displayName: any(named: 'displayName'),
               avatarColor: any(named: 'avatarColor'),
             )).thenThrow(Exception('Network error'));
 
@@ -347,13 +302,11 @@ void main() {
         when(() => authService.createAccount(
               email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
-              displayName: any(named: 'displayName'),
               avatarColor: any(named: 'avatarColor'),
             )).thenAnswer((_) async => User(
               id: 'new-id',
               email: 'ashe@example.com',
               phoneNumber: '+15551234567',
-              displayName: 'Ashe',
               avatarColor: 'Deep Ember',
               createdAt: DateTime.now(),
             ));
@@ -379,7 +332,6 @@ void main() {
         expect(freshNotifier.state.step, OnboardingStep.emailEntry);
         expect(freshNotifier.state.email, '');
         expect(freshNotifier.state.phoneNumber, '');
-        expect(freshNotifier.state.displayName, '');
         freshContainer.dispose();
       });
 
@@ -393,13 +345,11 @@ void main() {
         when(() => authService.createAccount(
               email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
-              displayName: any(named: 'displayName'),
               avatarColor: any(named: 'avatarColor'),
             )).thenAnswer((_) async => User(
               id: 'new-id',
               email: 'ashe@example.com',
               phoneNumber: '+15551234567',
-              displayName: 'Ashe',
               avatarColor: 'Deep Ember',
               createdAt: DateTime.now(),
             ));
@@ -433,36 +383,18 @@ void main() {
         verify(() => authService.signOut()).called(1);
       });
 
-      test('goBack from displayName returns to phoneNumber', () async {
-        await advanceTo(OnboardingStep.displayName);
+      test('goBack from contactsPermission returns to phoneNumber', () async {
+        await advanceTo(OnboardingStep.contactsPermission);
 
         notifier.goBack();
 
         expect(notifier.state.step, OnboardingStep.phoneNumber);
       });
 
-      test('goBack from contactsPermission returns to displayName', () async {
-        await advanceTo(OnboardingStep.contactsPermission);
-
-        notifier.goBack();
-
-        expect(notifier.state.step, OnboardingStep.displayName);
-      });
-
       test('goBack from emailEntry stays on emailEntry', () {
         notifier.goBack();
 
         expect(notifier.state.step, OnboardingStep.emailEntry);
-      });
-
-      test('goBack clears error state', () async {
-        await advanceTo(OnboardingStep.displayName);
-        notifier.setDisplayName('');
-        expect(notifier.state.error, isNotNull);
-
-        notifier.goBack();
-
-        expect(notifier.state.error, isNull);
       });
     });
   });

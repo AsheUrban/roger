@@ -18,7 +18,6 @@ class AuthService {
   Future<app.User> createAccount({
     required String email,
     required String phoneNumber,
-    required String displayName,
     required String avatarColor,
   }) async {
     final authUser = _client.auth.currentUser;
@@ -32,7 +31,6 @@ class AuthService {
       'id': authUser.id,
       'email': email,
       'phone_number': phoneNumber,
-      'display_name': displayName,
       'avatar_color': avatarColor,
       'phone_verified': false,
       'created_at': now,
@@ -103,13 +101,6 @@ class AuthService {
         .eq('id', _client.auth.currentUser!.id);
   }
 
-  Future<void> updateDisplayName(String name) async {
-    await _client
-        .from('users')
-        .update({'display_name': name})
-        .eq('id', _client.auth.currentUser!.id);
-  }
-
   Future<void> updateAvatarColor(String color) async {
     await _client
         .from('users')
@@ -122,7 +113,6 @@ class AuthService {
       id: row['id'] as String,
       email: row['email'] as String,
       phoneNumber: row['phone_number'] as String,
-      displayName: row['display_name'] as String,
       avatarColor: row['avatar_color'] as String,
       phoneVerified: row['phone_verified'] as bool? ?? false,
       lastActiveAt: row['last_active_at'] != null

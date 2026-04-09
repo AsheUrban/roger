@@ -9,7 +9,6 @@ import 'package:roger/core/services/auth_service.dart';
 import 'package:roger/core/services/contacts_service.dart';
 import 'package:roger/features/onboarding/onboarding_notifier.dart';
 import 'package:roger/features/onboarding/onboarding_screen.dart';
-import 'package:roger/features/onboarding/onboarding_state.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 class MockAuthService extends Mock implements AuthService {}
@@ -201,7 +200,7 @@ void main() {
         await tester.tap(find.text('Continue'));
         await tester.pumpAndSettle();
 
-        expect(find.text('What should people\ncall you?'), findsOneWidget);
+        expect(find.text('Find your people'), findsOneWidget);
       });
 
       testWidgets('empty phone number shows error', (tester) async {
@@ -211,72 +210,6 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.textContaining('cannot be empty'), findsOneWidget);
-      });
-    });
-
-    group('displayName step', () {
-      Future<void> advanceToDisplayName(WidgetTester tester) async {
-        when(() => authService.sendMagicLink(any()))
-            .thenAnswer((_) async {});
-        when(() => authService.getCurrentUser())
-            .thenAnswer((_) async => null);
-        when(() => authService.isPhoneNumberTaken(any()))
-            .thenAnswer((_) async => false);
-
-        await tester.pumpWidget(buildTestWidget());
-
-        // email → awaitingEmail
-        await tester.enterText(find.byType(TextField), 'ashe@example.com');
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-
-        // Simulate auth callback
-        final container = ProviderScope.containerOf(
-          tester.element(find.byType(OnboardingScreen)),
-        );
-        await container.read(onboardingProvider.notifier).onAuthStateChanged();
-        await tester.pumpAndSettle();
-
-        // phone → displayName
-        await tester.enterText(find.byType(TextField), '+15551234567');
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-      }
-
-      testWidgets('renders display name field', (tester) async {
-        await advanceToDisplayName(tester);
-
-        expect(find.text('What should people\ncall you?'), findsOneWidget);
-        expect(find.text('Display name'), findsOneWidget);
-      });
-
-      testWidgets('tapping Continue with valid name advances',
-          (tester) async {
-        await advanceToDisplayName(tester);
-
-        await tester.enterText(find.byType(TextField), 'Ashe');
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-
-        expect(find.text('Find your people'), findsOneWidget);
-      });
-
-      testWidgets('empty name shows error', (tester) async {
-        await advanceToDisplayName(tester);
-
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-
-        expect(find.textContaining('cannot be empty'), findsOneWidget);
-      });
-
-      testWidgets('tapping back returns to phone number', (tester) async {
-        await advanceToDisplayName(tester);
-
-        await tester.tap(find.byIcon(Icons.arrow_back));
-        await tester.pumpAndSettle();
-
-        expect(find.text('Your phone number'), findsOneWidget);
       });
     });
 
@@ -303,13 +236,8 @@ void main() {
         await container.read(onboardingProvider.notifier).onAuthStateChanged();
         await tester.pumpAndSettle();
 
-        // phone → displayName
+        // phone → contacts
         await tester.enterText(find.byType(TextField), '+15551234567');
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-
-        // displayName → contacts
-        await tester.enterText(find.byType(TextField), 'Ashe');
         await tester.tap(find.text('Continue'));
         await tester.pumpAndSettle();
       }
@@ -323,13 +251,13 @@ void main() {
         expect(find.text('Not now'), findsOneWidget);
       });
 
-      testWidgets('tapping back returns to display name', (tester) async {
+      testWidgets('tapping back returns to phone number', (tester) async {
         await advanceToContacts(tester);
 
         await tester.tap(find.byIcon(Icons.arrow_back));
         await tester.pumpAndSettle();
 
-        expect(find.text('What should people\ncall you?'), findsOneWidget);
+        expect(find.text('Your phone number'), findsOneWidget);
       });
     });
   });

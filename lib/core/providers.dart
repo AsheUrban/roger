@@ -3,8 +3,10 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'database/app_database.dart';
 import 'services/auth_service.dart';
 import 'services/contacts_service.dart';
+import 'services/database_key_service.dart';
 
 final authServiceProvider = Provider<AuthService>((ref) => AuthService());
 final contactsServiceProvider = Provider<ContactsService>((ref) => ContactsService());
@@ -22,3 +24,13 @@ final currentUserIdProvider = Provider<String?>((ref) {
 final authStateChangesProvider = StreamProvider<AuthState>((ref) {
   return Supabase.instance.client.auth.onAuthStateChange;
 });
+
+/// Initialized in main() via ProviderScope override after the DB key is ready.
+/// Throws if accessed before initialization — this is intentional.
+final appDatabaseProvider = Provider<AppDatabase>((ref) {
+  throw UnimplementedError('appDatabaseProvider must be overridden in main()');
+});
+
+final databaseKeyServiceProvider = Provider<DatabaseKeyService>(
+  (ref) => DatabaseKeyService(),
+);

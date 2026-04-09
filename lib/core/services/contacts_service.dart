@@ -124,7 +124,6 @@ class ContactsService {
       id: row['id'] as String,
       email: row['email'] as String,
       phoneNumber: row['phone_number'] as String,
-      displayName: row['display_name'] as String,
       avatarColor: row['avatar_color'] as String,
       phoneVerified: row['phone_verified'] as bool? ?? false,
       lastActiveAt: row['last_active_at'] != null

@@ -13,7 +13,8 @@ dependencies:
   riverpod_annotation: ^2.6.1
   go_router: ^14.8.1
   drift: ^2.23.1
-  sqlite3_flutter_libs: ^0.5.28
+  sqlcipher_flutter_libs: 0.7.0+eol
+  flutter_secure_storage: ^9.2.2
   supabase_flutter: ^2.8.4
   crypto: ^3.0.6
   path_provider: ^2.1.5

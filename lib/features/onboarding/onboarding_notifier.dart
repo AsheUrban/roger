@@ -55,8 +55,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       OnboardingStep.emailEntry => OnboardingStep.emailEntry,
       OnboardingStep.awaitingEmail => OnboardingStep.emailEntry,
       OnboardingStep.phoneNumber => OnboardingStep.emailEntry,
-      OnboardingStep.displayName => OnboardingStep.phoneNumber,
-      OnboardingStep.contactsPermission => OnboardingStep.displayName,
+      OnboardingStep.contactsPermission => OnboardingStep.phoneNumber,
     };
 
     // If going back from post-auth steps to email entry, sign out
@@ -172,7 +171,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
 
       state = state.copyWith(
         phoneNumber: trimmed,
-        step: OnboardingStep.displayName,
+        step: OnboardingStep.contactsPermission,
         isLoading: false,
       );
     } catch (e) {
@@ -182,28 +181,6 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
             'Check your connection and try again.',
       );
     }
-  }
-
-  void setDisplayName(String name) {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) {
-      state = state.copyWith(
-        error: () => 'Display name cannot be empty.',
-      );
-      return;
-    }
-    if (trimmed.length > 50) {
-      state = state.copyWith(
-        error: () => 'Display name must be 50 characters or less.',
-      );
-      return;
-    }
-
-    state = state.copyWith(
-      displayName: trimmed,
-      step: OnboardingStep.contactsPermission,
-      error: () => null,
-    );
   }
 
   Future<void> requestContactsPermission() async {
@@ -232,7 +209,6 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       await _authService.createAccount(
         email: state.email,
         phoneNumber: state.phoneNumber,
-        displayName: state.displayName,
         avatarColor: state.avatarColor,
       );
 

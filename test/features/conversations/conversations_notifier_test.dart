@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:roger/core/database/app_database.dart';
 import 'package:roger/core/models/conversation.dart';
 import 'package:roger/core/models/user.dart';
 import 'package:roger/core/providers.dart';
@@ -13,6 +15,9 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 class MockContactsService extends Mock implements ContactsService {}
 class MockSupabaseClient extends Mock implements SupabaseClient {}
+
+AppDatabase _makeInMemoryDatabase() =>
+    AppDatabase(NativeDatabase.memory());
 
 // Fake notifier — overrides build() to return a preset state, skipping
 // all Supabase setup. onNewMessage() uses the real implementation.
@@ -57,12 +62,16 @@ ConversationSummary _makeSummary({
 
 void main() {
   late MockContactsService contactsService;
+  late AppDatabase appDatabase;
 
   setUp(() {
     contactsService = MockContactsService();
     when(() => contactsService.cachedContacts).thenReturn([]);
     when(() => contactsService.cachedRogerUsers).thenReturn([]);
+    appDatabase = _makeInMemoryDatabase();
   });
+
+  tearDown(() async => appDatabase.close());
 
   ProviderContainer _makeContainer({ConversationsState? seed}) {
     return ProviderContainer(
@@ -74,6 +83,7 @@ void main() {
         contactsServiceProvider.overrideWithValue(contactsService),
         supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
         currentUserIdProvider.overrideWithValue('current-user-id'),
+        appDatabaseProvider.overrideWithValue(appDatabase),
         authStateChangesProvider.overrideWith(
           (ref) => const Stream<AuthState>.empty(),
         ),

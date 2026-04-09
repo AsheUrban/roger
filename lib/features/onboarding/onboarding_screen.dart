@@ -29,7 +29,6 @@ class OnboardingScreen extends ConsumerWidget {
             OnboardingStep.emailEntry => const _EmailEntryStep(),
             OnboardingStep.awaitingEmail => const _AwaitingEmailStep(),
             OnboardingStep.phoneNumber => const _PhoneNumberStep(),
-            OnboardingStep.displayName => const _DisplayNameStep(),
             OnboardingStep.contactsPermission =>
               const _ContactsPermissionStep(),
           },
@@ -237,71 +236,6 @@ class _PhoneNumberStepState extends ConsumerState<_PhoneNumberStep> {
           isLoading: state.isLoading,
           onPressed: () {
             notifier.submitPhoneNumber(_controller.text);
-          },
-        ),
-        const Spacer(flex: 2),
-      ],
-    );
-  }
-}
-
-// ============================================================
-// Display Name
-// ============================================================
-class _DisplayNameStep extends ConsumerStatefulWidget {
-  const _DisplayNameStep();
-
-  @override
-  ConsumerState<_DisplayNameStep> createState() => _DisplayNameStepState();
-}
-
-class _DisplayNameStepState extends ConsumerState<_DisplayNameStep> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(onboardingProvider);
-    final notifier = ref.read(onboardingProvider.notifier);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _BackButton(onPressed: notifier.goBack),
-        const Spacer(),
-        const Text(
-          'What should people\ncall you?',
-          style: TextStyle(color: warmWhite, fontSize: 24),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 32),
-        TextField(
-          controller: _controller,
-          maxLength: 50,
-          style: const TextStyle(color: warmWhite),
-          decoration: InputDecoration(
-            hintText: 'Display name',
-            hintStyle: TextStyle(color: warmWhite.withValues(alpha: 0.5)),
-            counterStyle: TextStyle(color: warmWhite.withValues(alpha: 0.3)),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: warmWhite.withValues(alpha: 0.3)),
-            ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: warmWhite),
-            ),
-          ),
-        ),
-        _ErrorText(state.error),
-        const SizedBox(height: 24),
-        _PrimaryButton(
-          label: 'Continue',
-          onPressed: () {
-            notifier.setDisplayName(_controller.text);
           },
         ),
         const Spacer(flex: 2),

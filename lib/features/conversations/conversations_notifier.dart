@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
+import '../../core/database/local_conversation_member_dao.dart';
 import '../../core/models/conversation.dart';
 import '../../core/models/user.dart';
 import '../../core/providers.dart';
@@ -71,6 +72,8 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
     final currentUserId = ref.read(currentUserIdProvider);
     if (currentUserId == null) return;
 
+    final dao = LocalConversationMemberDao(ref.read(appDatabaseProvider));
+
     state = state.copyWith(isLoading: true, error: () => null);
 
     try {
@@ -104,21 +107,50 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
             .isFilter('left_at', null);
 
         final members = <User>[];
+        final deletedMemberIds = <String>[];
+
         for (final row in otherRows as List) {
+          final memberId = row['id'] as String;
           final ud = row['users'];
-          if (ud == null) continue; // deleted user — excluded from members list
-          members.add(User(
-            id: ud['id'] as String,
-            email: ud['email'] as String,
-            phoneNumber: ud['phone_number'] as String,
-            displayName: ud['display_name'] as String,
-            avatarColor: ud['avatar_color'] as String,
-            phoneVerified: ud['phone_verified'] as bool? ?? false,
-            lastActiveAt: ud['last_active_at'] != null
-                ? DateTime.parse(ud['last_active_at'] as String)
-                : null,
-            createdAt: DateTime.parse(ud['created_at'] as String),
-          ));
+
+          if (ud != null) {
+            // Active user — upsert into drift so we have a cached record if they ever delete
+            await dao.upsertMember(
+              memberId: memberId,
+              conversationId: convId,
+              userId: ud['id'] as String,
+              phoneNumber: ud['phone_number'] as String,
+              avatarColor: ud['avatar_color'] as String,
+            );
+            members.add(User(
+              id: ud['id'] as String,
+              email: ud['email'] as String,
+              phoneNumber: ud['phone_number'] as String,
+              avatarColor: ud['avatar_color'] as String,
+              phoneVerified: ud['phone_verified'] as bool? ?? false,
+              lastActiveAt: ud['last_active_at'] != null
+                  ? DateTime.parse(ud['last_active_at'] as String)
+                  : null,
+              createdAt: DateTime.parse(ud['created_at'] as String),
+            ));
+          } else {
+            // Deleted user — drift already holds their cached data from when they were active
+            deletedMemberIds.add(memberId);
+          }
+        }
+
+        // Resolve deleted member display names from drift cache
+        final deletedNames = <String>[];
+        for (final memberId in deletedMemberIds) {
+          final phone = await dao.getPhoneNumber(memberId);
+          if (phone != null) {
+            final contact = _contactsService.cachedContacts
+                .where((c) => c.phoneNumber == phone)
+                .firstOrNull;
+            deletedNames.add(contact?.name ?? 'Deleted user');
+          } else {
+            deletedNames.add('Deleted user');
+          }
         }
 
         // Get last message timestamp and basic unread status
@@ -157,7 +189,7 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
 
         summaries.add(ConversationSummary(
           conversation: conversation,
-          displayName: _resolveDisplayName(members, conversation),
+          displayName: _resolveDisplayName(members, deletedNames, conversation),
           members: members,
           memberContactNames: _resolveMemberContactNames(members),
           lastMessageAt: lastMessageAt,
@@ -198,16 +230,23 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
     state = state.copyWith(conversations: updated);
   }
 
-  // Display name: group name if set, otherwise contact names for each member.
-  // Falls back to '?' for unsaved numbers (matches Name Resolution spec).
-  String _resolveDisplayName(List<User> members, Conversation conversation) {
+  // Display name: group name if set, otherwise contact names for active members
+  // plus resolved names for deleted members. Falls back to '?' for unsaved numbers.
+  String _resolveDisplayName(
+    List<User> members,
+    List<String> deletedNames,
+    Conversation conversation,
+  ) {
     if (conversation.name != null) return conversation.name!;
-    if (members.isEmpty) return '?';
-    return members.map((m) {
-      final contacts = _contactsService.cachedContacts
-          .where((c) => c.phoneNumber == m.phoneNumber);
-      return contacts.isEmpty ? '?' : contacts.first.name;
-    }).join(', ');
+    final activeNames = members.map((m) {
+      final contact = _contactsService.cachedContacts
+          .where((c) => c.phoneNumber == m.phoneNumber)
+          .firstOrNull;
+      return contact?.name ?? '?';
+    });
+    final all = [...activeNames, ...deletedNames];
+    if (all.isEmpty) return '?';
+    return all.join(', ');
   }
 
   // Contact name for each member — parallel list used by the screen for avatar initials.

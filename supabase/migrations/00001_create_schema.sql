@@ -8,7 +8,6 @@ create table public.users (
   id              uuid primary key references auth.users(id) on delete cascade,
   email           text not null unique,
   phone_number    text not null unique,
-  display_name    text not null,
   avatar_color    text not null,
   phone_verified  boolean not null default false,
   last_active_at  timestamptz,
