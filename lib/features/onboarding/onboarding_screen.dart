@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl_phone_number_input/intl_phone_number_input.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart' as t;
@@ -49,6 +50,7 @@ class _PhoneEntryStep extends ConsumerStatefulWidget {
 
 class _PhoneEntryStepState extends ConsumerState<_PhoneEntryStep> {
   final _controller = TextEditingController();
+  PhoneNumber _phoneNumber = PhoneNumber(isoCode: 'US');
 
   @override
   void dispose() {
@@ -70,16 +72,27 @@ class _PhoneEntryStepState extends ConsumerState<_PhoneEntryStep> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 48),
-        TextField(
-          controller: _controller,
+        InternationalPhoneNumberInput(
+          onInputChanged: (PhoneNumber number) {
+            _phoneNumber = number;
+          },
+          selectorConfig: const SelectorConfig(
+            selectorType: PhoneInputSelectorType.BOTTOM_SHEET,
+            useBottomSheetSafeArea: true,
+            leadingPadding: 12,
+          ),
+          textFieldController: _controller,
+          initialValue: _phoneNumber,
           keyboardType: TextInputType.phone,
-          style: t.inputText,
-          decoration: InputDecoration(
+          textStyle: t.inputText,
+          selectorTextStyle: t.inputText,
+          inputDecoration: InputDecoration(
             hintText: 'Phone number',
             hintStyle: t.hintText,
             enabledBorder: t.inputBorderEnabled,
             focusedBorder: t.inputBorderFocused,
           ),
+          cursorColor: warmWhite,
         ),
         _ErrorText(state.error),
         const SizedBox(height: 24),
@@ -88,7 +101,7 @@ class _PhoneEntryStepState extends ConsumerState<_PhoneEntryStep> {
           isLoading: state.isLoading,
           onPressed: () {
             ref.read(onboardingProvider.notifier).sendOtp(
-                  _controller.text,
+                  _phoneNumber.phoneNumber ?? '',
                 );
           },
         ),
@@ -199,7 +212,7 @@ class _ContactsPermissionStep extends ConsumerWidget {
         const SizedBox(height: 12),
         Text(
           'Allow contacts access to find friends on roger. '
-          'Your contacts are hashed on-device — raw numbers never leave your phone.',
+          'Rest assured, unecrypted numbers never leave your phone.',
           style: t.bodySubdued,
           textAlign: TextAlign.center,
         ),

@@ -66,6 +66,65 @@ void main() {
       });
     });
 
+    group('contacts declined during onboarding', () {
+      test('does not auto-load contacts when user declined even if OS permission exists',
+          () async {
+        // OS has permission from a previous install
+        when(() => contactsService.hasPermission())
+            .thenAnswer((_) async => true);
+
+        // But user tapped "Not now" during onboarding
+        final declinedContainer = ProviderContainer(overrides: [
+          contactsServiceProvider.overrideWithValue(contactsService),
+          supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
+          currentUserIdProvider.overrideWithValue('current-user-id'),
+          contactsDeclinedProvider.overrideWith((ref) => true),
+        ]);
+
+        // Let _initAsync run
+        await Future<void>.delayed(Duration.zero);
+
+        final state = declinedContainer.read(searchProvider);
+        expect(state.results, isEmpty);
+        expect(state.hasContactsPermission, false);
+        verifyNever(() => contactsService.refreshBatchCheck());
+
+        declinedContainer.dispose();
+      });
+
+      test('granting permission via search bar overrides declined flag',
+          () async {
+        when(() => contactsService.requestPermission())
+            .thenAnswer((_) async => true);
+        when(() => contactsService.refreshBatchCheck())
+            .thenAnswer((_) async {});
+        when(() => contactsService.cachedContacts).thenReturn([
+          (name: 'Jordan B', phoneNumber: '+15551111111'),
+        ]);
+        when(() => contactsService.cachedRogerUsers)
+            .thenReturn([_testUser1]);
+
+        final declinedContainer = ProviderContainer(overrides: [
+          contactsServiceProvider.overrideWithValue(contactsService),
+          supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
+          currentUserIdProvider.overrideWithValue('current-user-id'),
+          contactsDeclinedProvider.overrideWith((ref) => true),
+        ]);
+
+        final declinedNotifier = declinedContainer.read(searchProvider.notifier);
+
+        await declinedNotifier.requestContactsPermission();
+
+        final state = declinedContainer.read(searchProvider);
+        expect(state.results.length, 1);
+        expect(state.hasContactsPermission, true);
+        // Declined flag should be cleared
+        expect(declinedContainer.read(contactsDeclinedProvider), false);
+
+        declinedContainer.dispose();
+      });
+    });
+
     group('contact loading', () {
       test('loadInitialContacts runs refreshBatchCheck and populates results',
           () async {

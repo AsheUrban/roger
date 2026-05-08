@@ -34,6 +34,11 @@ class SearchNotifier extends Notifier<SearchState> {
   }
 
   Future<void> _initAsync() async {
+    // Respect user's choice to skip contacts during onboarding,
+    // even if OS permission was already granted from a previous install
+    final declined = ref.read(contactsDeclinedProvider);
+    if (declined) return;
+
     final granted = await _contactsService.hasPermission();
     if (granted) {
       state = state.copyWith(hasContactsPermission: true);
@@ -62,6 +67,8 @@ class SearchNotifier extends Notifier<SearchState> {
   Future<void> requestContactsPermission() async {
     final granted = await _contactsService.requestPermission();
     if (granted) {
+      // Clear the declined flag — user has now explicitly granted permission
+      ref.read(contactsDeclinedProvider.notifier).state = false;
       state = state.copyWith(hasContactsPermission: true);
       await loadInitialContacts();
     }

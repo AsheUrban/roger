@@ -60,9 +60,10 @@ void main() {
 
         await tester.pumpWidget(buildTestWidget());
 
+        // Enter local number only — country picker provides +1
         await tester.enterText(
-          find.byType(TextField),
-          '+15550001000',
+          find.byType(TextField).last,
+          '5550001000',
         );
         await tester.tap(find.text('Continue'));
         await tester.pumpAndSettle();
@@ -89,8 +90,8 @@ void main() {
 
         await tester.pumpWidget(buildTestWidget());
 
-        // phone → OTP
-        await tester.enterText(find.byType(TextField), '+15550001000');
+        // phone → OTP (enter local number, picker provides +1)
+        await tester.enterText(find.byType(TextField).last, '5550001000');
         await tester.tap(find.text('Continue'));
         await tester.pumpAndSettle();
       }

@@ -6,10 +6,9 @@
 -- ============================================================
 create table public.users (
   id              uuid primary key references auth.users(id) on delete cascade,
-  email           text not null unique,
   phone_number    text not null unique,
   avatar_color    text not null,
-  phone_verified  boolean not null default false,
+  recovery_email  text unique,
   last_active_at  timestamptz,
   created_at      timestamptz not null default now()
 );
