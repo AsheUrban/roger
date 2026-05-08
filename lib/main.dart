@@ -33,7 +33,7 @@ Future<String?> routerRedirect({
   final exists = await hasUsersRow(session.user.id);
 
   if (!exists) {
-    // Magic link verified but account creation never finished
+    // OTP verified but account creation never finished
     return isOnboarding ? null : '/onboarding';
   }
 
@@ -100,9 +100,6 @@ Future<void> main() async {
   await Supabase.initialize(
     url: Env.supabaseUrl,
     anonKey: Env.supabaseAnonKey,
-    authOptions: const FlutterAuthClientOptions(
-      authFlowType: AuthFlowType.pkce,
-    ),
   );
 
   final dbKey = await DatabaseKeyService().getOrCreateKey();

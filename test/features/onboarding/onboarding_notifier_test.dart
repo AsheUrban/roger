@@ -33,9 +33,6 @@ void main() {
       authServiceProvider.overrideWithValue(authService),
       contactsServiceProvider.overrideWithValue(contactsService),
       randomProvider.overrideWithValue(random),
-      authStateChangesProvider.overrideWith(
-        (ref) => const Stream<AuthState>.empty(),
-      ),
     ]);
 
     notifier = container.read(onboardingProvider.notifier);
@@ -47,173 +44,146 @@ void main() {
 
   /// Helper: advance notifier to a given step with valid state
   Future<void> advanceTo(OnboardingStep target) async {
-    if (target == OnboardingStep.emailEntry) return;
+    if (target == OnboardingStep.phoneEntry) return;
 
-    when(() => authService.sendMagicLink(any())).thenAnswer((_) async {});
-    await notifier.sendMagicLink('ashe@example.com');
+    when(() => authService.sendOtp(any())).thenAnswer((_) async {});
+    await notifier.sendOtp('+15550001000');
 
-    if (target == OnboardingStep.awaitingEmail) return;
+    if (target == OnboardingStep.otpVerification) return;
 
-    // Simulate magic link callback — new user
+    // Simulate successful OTP verification — new user
+    when(() => authService.verifyOtp(
+          phoneNumber: any(named: 'phoneNumber'),
+          otpCode: any(named: 'otpCode'),
+        )).thenAnswer((_) async => AuthResponse(
+          session: null,
+          user: null,
+        ));
     when(() => authService.getCurrentUser())
         .thenAnswer((_) async => null);
-    await notifier.onAuthStateChanged();
-
-    if (target == OnboardingStep.phoneNumber) return;
-
-    when(() => authService.isPhoneNumberTaken(any()))
-        .thenAnswer((_) async => false);
-    await notifier.submitPhoneNumber('+15551234567');
+    await notifier.verifyOtp('123456');
   }
 
   group('OnboardingNotifier', () {
-    group('email entry', () {
-      test('sendMagicLink calls authService and advances to awaitingEmail',
+    group('phone entry', () {
+      test('sendOtp calls authService and advances to otpVerification',
           () async {
-        when(() => authService.sendMagicLink('ashe@example.com'))
+        when(() => authService.sendOtp('+15550001000'))
             .thenAnswer((_) async {});
 
-        await notifier.sendMagicLink('ashe@example.com');
+        await notifier.sendOtp('+15550001000');
 
-        verify(() => authService.sendMagicLink('ashe@example.com')).called(1);
-        expect(notifier.state.step, OnboardingStep.awaitingEmail);
-        expect(notifier.state.email, 'ashe@example.com');
+        verify(() => authService.sendOtp('+15550001000')).called(1);
+        expect(notifier.state.step, OnboardingStep.otpVerification);
+        expect(notifier.state.phoneNumber, '+15550001000');
         expect(notifier.state.isLoading, false);
       });
 
-      test('trims whitespace from email', () async {
-        when(() => authService.sendMagicLink('ashe@example.com'))
+      test('trims whitespace from phone number', () async {
+        when(() => authService.sendOtp('+15550001000'))
             .thenAnswer((_) async {});
 
-        await notifier.sendMagicLink('  ashe@example.com  ');
+        await notifier.sendOtp('  +15550001000  ');
 
-        expect(notifier.state.email, 'ashe@example.com');
-        expect(notifier.state.step, OnboardingStep.awaitingEmail);
+        expect(notifier.state.phoneNumber, '+15550001000');
+        expect(notifier.state.step, OnboardingStep.otpVerification);
       });
 
-      test('rejects empty email', () async {
-        await notifier.sendMagicLink('');
+      test('rejects empty phone number', () async {
+        await notifier.sendOtp('');
 
-        expect(notifier.state.step, OnboardingStep.emailEntry);
-        expect(notifier.state.error, contains('valid email'));
-        verifyNever(() => authService.sendMagicLink(any()));
-      });
-
-      test('rejects invalid email format', () async {
-        await notifier.sendMagicLink('not-an-email');
-
-        expect(notifier.state.step, OnboardingStep.emailEntry);
-        expect(notifier.state.error, contains('valid email'));
-        verifyNever(() => authService.sendMagicLink(any()));
+        expect(notifier.state.step, OnboardingStep.phoneEntry);
+        expect(notifier.state.error, contains('cannot be empty'));
+        verifyNever(() => authService.sendOtp(any()));
       });
 
       test('shows error on failure', () async {
-        when(() => authService.sendMagicLink(any()))
+        when(() => authService.sendOtp(any()))
             .thenThrow(Exception('Network error'));
 
-        await notifier.sendMagicLink('ashe@example.com');
+        await notifier.sendOtp('+15550001000');
 
-        expect(notifier.state.step, OnboardingStep.emailEntry);
+        expect(notifier.state.step, OnboardingStep.phoneEntry);
         expect(notifier.state.error, isNotNull);
         expect(notifier.state.isLoading, false);
       });
     });
 
-    group('awaiting email', () {
+    group('OTP verification', () {
       setUp(() async {
-        await advanceTo(OnboardingStep.awaitingEmail);
+        await advanceTo(OnboardingStep.otpVerification);
       });
 
-      test('onAuthStateChanged with existing user completes onboarding',
-          () async {
+      test('verifyOtp with existing user completes onboarding', () async {
+        when(() => authService.verifyOtp(
+              phoneNumber: any(named: 'phoneNumber'),
+              otpCode: any(named: 'otpCode'),
+            )).thenAnswer((_) async => AuthResponse(
+              session: null,
+              user: null,
+            ));
         when(() => authService.getCurrentUser()).thenAnswer((_) async => User(
               id: 'existing-id',
-              email: 'ashe@example.com',
-              phoneNumber: '+15551234567',
+              phoneNumber: '+15550001000',
               avatarColor: 'Rust',
               createdAt: DateTime.now(),
             ));
 
-        await notifier.onAuthStateChanged();
+        await notifier.verifyOtp('123456');
 
         expect(notifier.state.onboardingComplete, true);
       });
 
-      test('onAuthStateChanged with new user assigns avatar and advances',
+      test('verifyOtp with new user assigns avatar and advances to contacts',
           () async {
+        when(() => authService.verifyOtp(
+              phoneNumber: any(named: 'phoneNumber'),
+              otpCode: any(named: 'otpCode'),
+            )).thenAnswer((_) async => AuthResponse(
+              session: null,
+              user: null,
+            ));
         when(() => authService.getCurrentUser())
             .thenAnswer((_) async => null);
 
-        await notifier.onAuthStateChanged();
+        await notifier.verifyOtp('123456');
 
-        expect(notifier.state.step, OnboardingStep.phoneNumber);
+        expect(notifier.state.step, OnboardingStep.contactsPermission);
         expect(notifier.state.avatarColor, 'Deep Ember');
       });
 
-      test('resendMagicLink calls authService again', () async {
+      test('verifyOtp with invalid code shows error', () async {
+        when(() => authService.verifyOtp(
+              phoneNumber: any(named: 'phoneNumber'),
+              otpCode: any(named: 'otpCode'),
+            )).thenThrow(Exception('Invalid OTP'));
+
+        await notifier.verifyOtp('000000');
+
+        expect(notifier.state.step, OnboardingStep.otpVerification);
+        expect(notifier.state.error, contains('Invalid or expired'));
+        expect(notifier.state.isLoading, false);
+      });
+
+      test('rejects empty OTP code', () async {
+        await notifier.verifyOtp('');
+
+        expect(notifier.state.step, OnboardingStep.otpVerification);
+        expect(notifier.state.error, contains('verification code'));
+        verifyNever(() => authService.verifyOtp(
+              phoneNumber: any(named: 'phoneNumber'),
+              otpCode: any(named: 'otpCode'),
+            ));
+      });
+
+      test('resendOtp calls authService again', () async {
         reset(authService);
-        when(() => authService.sendMagicLink('ashe@example.com'))
+        when(() => authService.sendOtp('+15550001000'))
             .thenAnswer((_) async {});
 
-        await notifier.resendMagicLink();
+        await notifier.resendOtp();
 
-        verify(() => authService.sendMagicLink('ashe@example.com')).called(1);
-      });
-    });
-
-    group('phone number', () {
-      setUp(() async {
-        await advanceTo(OnboardingStep.phoneNumber);
-      });
-
-      test('submitPhoneNumber stores value and advances to contactsPermission',
-          () async {
-        when(() => authService.isPhoneNumberTaken('+15551234567'))
-            .thenAnswer((_) async => false);
-
-        await notifier.submitPhoneNumber('+15551234567');
-
-        expect(notifier.state.phoneNumber, '+15551234567');
-        expect(notifier.state.step, OnboardingStep.contactsPermission);
-      });
-
-      test('rejects empty phone number', () async {
-        await notifier.submitPhoneNumber('');
-
-        expect(notifier.state.step, OnboardingStep.phoneNumber);
-        expect(notifier.state.error, isNotNull);
-      });
-
-      test('rejects phone number already claimed by another account',
-          () async {
-        when(() => authService.isPhoneNumberTaken('+15559999999'))
-            .thenAnswer((_) async => true);
-
-        await notifier.submitPhoneNumber('+15559999999');
-
-        expect(notifier.state.step, OnboardingStep.phoneNumber);
-        expect(notifier.state.error, contains('already in use'));
-      });
-
-      test('trims whitespace', () async {
-        when(() => authService.isPhoneNumberTaken('+15551234567'))
-            .thenAnswer((_) async => false);
-
-        await notifier.submitPhoneNumber('  +15551234567  ');
-
-        expect(notifier.state.phoneNumber, '+15551234567');
-        expect(notifier.state.step, OnboardingStep.contactsPermission);
-      });
-
-      test('network failure on uniqueness check shows error and stays',
-          () async {
-        when(() => authService.isPhoneNumberTaken(any()))
-            .thenThrow(Exception('Network error'));
-
-        await notifier.submitPhoneNumber('+15551234567');
-
-        expect(notifier.state.step, OnboardingStep.phoneNumber);
-        expect(notifier.state.error, contains('Check your connection'));
+        verify(() => authService.sendOtp('+15550001000')).called(1);
       });
     });
 
@@ -221,13 +191,11 @@ void main() {
       setUp(() async {
         await advanceTo(OnboardingStep.contactsPermission);
         when(() => authService.createAccount(
-              email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
               avatarColor: any(named: 'avatarColor'),
             )).thenAnswer((_) async => User(
               id: 'new-id',
-              email: 'ashe@example.com',
-              phoneNumber: '+15551234567',
+              phoneNumber: '+15550001000',
               avatarColor: 'Deep Ember',
               createdAt: DateTime.now(),
             ));
@@ -265,13 +233,11 @@ void main() {
         when(() => contactsService.requestPermission())
             .thenAnswer((_) async => false);
         when(() => authService.createAccount(
-              email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
               avatarColor: any(named: 'avatarColor'),
             )).thenAnswer((_) async => User(
               id: 'new-id',
-              email: 'ashe@example.com',
-              phoneNumber: '+15551234567',
+              phoneNumber: '+15550001000',
               avatarColor: 'Deep Ember',
               createdAt: DateTime.now(),
             ));
@@ -289,7 +255,6 @@ void main() {
             .thenAnswer((_) async => false);
 
         when(() => authService.createAccount(
-              email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
               avatarColor: any(named: 'avatarColor'),
             )).thenThrow(Exception('Network error'));
@@ -300,13 +265,11 @@ void main() {
         expect(notifier.state.error, isNotNull);
 
         when(() => authService.createAccount(
-              email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
               avatarColor: any(named: 'avatarColor'),
             )).thenAnswer((_) async => User(
               id: 'new-id',
-              email: 'ashe@example.com',
-              phoneNumber: '+15551234567',
+              phoneNumber: '+15550001000',
               avatarColor: 'Deep Ember',
               createdAt: DateTime.now(),
             ));
@@ -318,19 +281,15 @@ void main() {
       });
 
       test('abandoning mid-flow and relaunching restarts from beginning', () {
-        // A fresh container always starts at emailEntry
+        // A fresh container always starts at phoneEntry
         final freshContainer = ProviderContainer(overrides: [
           authServiceProvider.overrideWithValue(authService),
           contactsServiceProvider.overrideWithValue(contactsService),
           randomProvider.overrideWithValue(random),
-          authStateChangesProvider.overrideWith(
-            (ref) => const Stream<AuthState>.empty(),
-          ),
         ]);
         final freshNotifier =
             freshContainer.read(onboardingProvider.notifier);
-        expect(freshNotifier.state.step, OnboardingStep.emailEntry);
-        expect(freshNotifier.state.email, '');
+        expect(freshNotifier.state.step, OnboardingStep.phoneEntry);
         expect(freshNotifier.state.phoneNumber, '');
         freshContainer.dispose();
       });
@@ -343,13 +302,11 @@ void main() {
         when(() => contactsService.refreshBatchCheck())
             .thenAnswer((_) async {});
         when(() => authService.createAccount(
-              email: any(named: 'email'),
               phoneNumber: any(named: 'phoneNumber'),
               avatarColor: any(named: 'avatarColor'),
             )).thenAnswer((_) async => User(
               id: 'new-id',
-              email: 'ashe@example.com',
-              phoneNumber: '+15551234567',
+              phoneNumber: '+15550001000',
               avatarColor: 'Deep Ember',
               createdAt: DateTime.now(),
             ));
@@ -363,38 +320,27 @@ void main() {
     });
 
     group('back navigation', () {
-      test('goBack from awaitingEmail returns to emailEntry', () async {
-        await advanceTo(OnboardingStep.awaitingEmail);
+      test('goBack from otpVerification returns to phoneEntry', () async {
+        await advanceTo(OnboardingStep.otpVerification);
 
         notifier.goBack();
 
-        expect(notifier.state.step, OnboardingStep.emailEntry);
+        expect(notifier.state.step, OnboardingStep.phoneEntry);
       });
 
-      test('goBack from phoneNumber returns to emailEntry and signs out',
+      test('goBack from contactsPermission returns to otpVerification',
           () async {
-        await advanceTo(OnboardingStep.phoneNumber);
-
-        when(() => authService.signOut()).thenAnswer((_) async {});
-
-        notifier.goBack();
-
-        expect(notifier.state.step, OnboardingStep.emailEntry);
-        verify(() => authService.signOut()).called(1);
-      });
-
-      test('goBack from contactsPermission returns to phoneNumber', () async {
         await advanceTo(OnboardingStep.contactsPermission);
 
         notifier.goBack();
 
-        expect(notifier.state.step, OnboardingStep.phoneNumber);
+        expect(notifier.state.step, OnboardingStep.otpVerification);
       });
 
-      test('goBack from emailEntry stays on emailEntry', () {
+      test('goBack from phoneEntry stays on phoneEntry', () {
         notifier.goBack();
 
-        expect(notifier.state.step, OnboardingStep.emailEntry);
+        expect(notifier.state.step, OnboardingStep.phoneEntry);
       });
     });
   });

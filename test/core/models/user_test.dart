@@ -2,11 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('User model', () {
-    test('requires email, phone number, and avatar color', () {
+    test('requires phone number and avatar color', () {
       fail('not implemented');
     });
 
-    test('phoneVerified defaults to false', () {
+    test('recoveryEmail is nullable', () {
       fail('not implemented');
     });
 

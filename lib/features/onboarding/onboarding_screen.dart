@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme/colors.dart';
+import '../../core/theme/typography.dart' as t;
 import 'onboarding_notifier.dart';
 import 'onboarding_state.dart';
 
@@ -26,9 +26,8 @@ class OnboardingScreen extends ConsumerWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
           child: switch (state.step) {
-            OnboardingStep.emailEntry => const _EmailEntryStep(),
-            OnboardingStep.awaitingEmail => const _AwaitingEmailStep(),
-            OnboardingStep.phoneNumber => const _PhoneNumberStep(),
+            OnboardingStep.phoneEntry => const _PhoneEntryStep(),
+            OnboardingStep.otpVerification => const _OtpVerificationStep(),
             OnboardingStep.contactsPermission =>
               const _ContactsPermissionStep(),
           },
@@ -39,16 +38,16 @@ class OnboardingScreen extends ConsumerWidget {
 }
 
 // ============================================================
-// Email Entry (no back button — this is the first step)
+// Phone Entry (no back button — this is the first step)
 // ============================================================
-class _EmailEntryStep extends ConsumerStatefulWidget {
-  const _EmailEntryStep();
+class _PhoneEntryStep extends ConsumerStatefulWidget {
+  const _PhoneEntryStep();
 
   @override
-  ConsumerState<_EmailEntryStep> createState() => _EmailEntryStepState();
+  ConsumerState<_PhoneEntryStep> createState() => _PhoneEntryStepState();
 }
 
-class _EmailEntryStepState extends ConsumerState<_EmailEntryStep> {
+class _PhoneEntryStepState extends ConsumerState<_PhoneEntryStep> {
   final _controller = TextEditingController();
 
   @override
@@ -67,26 +66,19 @@ class _EmailEntryStepState extends ConsumerState<_EmailEntryStep> {
         const Spacer(),
         Text(
           'roger',
-          style: GoogleFonts.youngSerif(
-            fontSize: 40,
-            color: warmWhite,
-          ),
+          style: t.wordmarkLarge,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 48),
         TextField(
           controller: _controller,
-          keyboardType: TextInputType.emailAddress,
-          style: const TextStyle(color: warmWhite),
+          keyboardType: TextInputType.phone,
+          style: t.inputText,
           decoration: InputDecoration(
-            hintText: 'Email address',
-            hintStyle: TextStyle(color: warmWhite.withValues(alpha: 0.5)),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: warmWhite.withValues(alpha: 0.3)),
-            ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: warmWhite),
-            ),
+            hintText: 'Phone number',
+            hintStyle: t.hintText,
+            enabledBorder: t.inputBorderEnabled,
+            focusedBorder: t.inputBorderFocused,
           ),
         ),
         _ErrorText(state.error),
@@ -95,7 +87,7 @@ class _EmailEntryStepState extends ConsumerState<_EmailEntryStep> {
           label: 'Continue',
           isLoading: state.isLoading,
           onPressed: () {
-            ref.read(onboardingProvider.notifier).sendMagicLink(
+            ref.read(onboardingProvider.notifier).sendOtp(
                   _controller.text,
                 );
           },
@@ -107,80 +99,17 @@ class _EmailEntryStepState extends ConsumerState<_EmailEntryStep> {
 }
 
 // ============================================================
-// Awaiting Email (magic link sent, waiting for user to tap it)
+// OTP Verification
 // ============================================================
-class _AwaitingEmailStep extends ConsumerWidget {
-  const _AwaitingEmailStep();
+class _OtpVerificationStep extends ConsumerStatefulWidget {
+  const _OtpVerificationStep();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(onboardingProvider);
-    final notifier = ref.read(onboardingProvider.notifier);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _BackButton(onPressed: notifier.goBack),
-        const Spacer(),
-        const Text(
-          'Check your email',
-          style: TextStyle(color: warmWhite, fontSize: 24),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          state.email,
-          style: const TextStyle(color: warmWhite, fontSize: 18),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Tap the link in the email to continue.\nOpen it on this device.',
-          style: TextStyle(
-            color: warmWhite.withValues(alpha: 0.6),
-            fontSize: 14,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        _ErrorText(state.error),
-        if (state.isLoading) ...[
-          const SizedBox(height: 32),
-          const Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: warmWhite,
-              ),
-            ),
-          ),
-        ],
-        const SizedBox(height: 32),
-        TextButton(
-          onPressed: state.isLoading ? null : notifier.resendMagicLink,
-          child: const Text(
-            'Resend email',
-            style: TextStyle(color: warmWhite),
-          ),
-        ),
-        const Spacer(flex: 2),
-      ],
-    );
-  }
+  ConsumerState<_OtpVerificationStep> createState() =>
+      _OtpVerificationStepState();
 }
 
-// ============================================================
-// Phone Number
-// ============================================================
-class _PhoneNumberStep extends ConsumerStatefulWidget {
-  const _PhoneNumberStep();
-
-  @override
-  ConsumerState<_PhoneNumberStep> createState() => _PhoneNumberStepState();
-}
-
-class _PhoneNumberStepState extends ConsumerState<_PhoneNumberStep> {
+class _OtpVerificationStepState extends ConsumerState<_OtpVerificationStep> {
   final _controller = TextEditingController();
 
   @override
@@ -200,43 +129,45 @@ class _PhoneNumberStepState extends ConsumerState<_PhoneNumberStep> {
         _BackButton(onPressed: notifier.goBack),
         const Spacer(),
         const Text(
-          'Your phone number',
-          style: TextStyle(color: warmWhite, fontSize: 24),
+          'Enter verification code',
+          style: t.titleLarge,
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Text(
-          'Your phone number helps friends find you on roger.',
-          style: TextStyle(
-            color: warmWhite.withValues(alpha: 0.6),
-            fontSize: 14,
-          ),
+          state.phoneNumber,
+          style: t.titleMedium,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 32),
         TextField(
           controller: _controller,
-          keyboardType: TextInputType.phone,
-          style: const TextStyle(color: warmWhite),
+          keyboardType: TextInputType.number,
+          style: t.inputText,
+          textAlign: TextAlign.center,
           decoration: InputDecoration(
-            hintText: 'Phone number',
-            hintStyle: TextStyle(color: warmWhite.withValues(alpha: 0.5)),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: warmWhite.withValues(alpha: 0.3)),
-            ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: warmWhite),
-            ),
+            hintText: '000000',
+            hintStyle: t.hintText,
+            enabledBorder: t.inputBorderEnabled,
+            focusedBorder: t.inputBorderFocused,
           ),
         ),
         _ErrorText(state.error),
         const SizedBox(height: 24),
         _PrimaryButton(
-          label: 'Continue',
+          label: 'Verify',
           isLoading: state.isLoading,
           onPressed: () {
-            notifier.submitPhoneNumber(_controller.text);
+            notifier.verifyOtp(_controller.text);
           },
+        ),
+        const SizedBox(height: 16),
+        TextButton(
+          onPressed: state.isLoading ? null : notifier.resendOtp,
+          child: const Text(
+            'Resend code',
+            style: t.buttonLabel,
+          ),
         ),
         const Spacer(flex: 2),
       ],
@@ -262,17 +193,14 @@ class _ContactsPermissionStep extends ConsumerWidget {
         const Spacer(),
         const Text(
           'Find your people',
-          style: TextStyle(color: warmWhite, fontSize: 24),
+          style: t.titleLarge,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 12),
         Text(
           'Allow contacts access to find friends on roger. '
           'Your contacts are hashed on-device — raw numbers never leave your phone.',
-          style: TextStyle(
-            color: warmWhite.withValues(alpha: 0.6),
-            fontSize: 14,
-          ),
+          style: t.bodySubdued,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 32),
@@ -286,7 +214,7 @@ class _ContactsPermissionStep extends ConsumerWidget {
           onPressed: state.isLoading ? null : notifier.skipContactsPermission,
           child: const Text(
             'Not now',
-            style: TextStyle(color: warmWhite),
+            style: t.buttonLabel,
           ),
         ),
         _ErrorText(state.error),
@@ -328,7 +256,7 @@ class _ErrorText extends StatelessWidget {
       padding: const EdgeInsets.only(top: 12),
       child: Text(
         error!,
-        style: const TextStyle(color: errorColor, fontSize: 14),
+        style: t.errorText,
       ),
     );
   }
@@ -367,7 +295,7 @@ class _PrimaryButton extends StatelessWidget {
                   color: warmWhite,
                 ),
               )
-            : Text(label, style: const TextStyle(fontSize: 16)),
+            : Text(label, style: t.bodyText),
       ),
     );
   }

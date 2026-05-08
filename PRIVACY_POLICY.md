@@ -17,7 +17,7 @@ This policy explains what information we do collect, why, and how it is handled.
 
 ### Information You Provide
 
-**Account information.** When you create an account, we collect your email address and phone number. Your email address is used for authentication and account recovery — it is never displayed to other users or used for marketing. Your phone number is how people in your contacts find you on roger. Other users see you by whatever name they have you saved as in their own device contacts.
+**Account information.** When you create an account, we collect your phone number. Your phone number is used for authentication and is how people in your contacts find you on roger. You may optionally add a recovery email address in Settings — this is used only for account recovery if you lose access to your phone number. It is never displayed to other users or used for marketing. Other users see you by whatever name they have you saved as in their own device contacts.
 
 **Messages.** Videos, photos, notes, and live call recordings are encrypted on your device before transmission. We store and deliver encrypted ciphertext only. We cannot decrypt or access your message content at any point.
 
@@ -39,8 +39,8 @@ When you grant contacts permission, roger hashes your contacts' phone numbers on
 
 | Data | Purpose |
 |---|---|
-| Email address | Authentication and account recovery |
-| Phone number | Contact discovery |
+| Phone number | Authentication and contact discovery |
+| Recovery email (optional) | Account recovery |
 | Encrypted message content | Delivery to recipients via Cloudflare R2 |
 | Device tokens | Push notification delivery |
 | Hashed contact numbers | Contact discovery — checked against registered users, not stored |
@@ -90,8 +90,8 @@ roger uses the following third-party infrastructure:
 
 We do not sell, rent, or trade your personal information. We may share information only in the following circumstances:
 
-- **Legal compliance.** If required by law or valid legal process. Because we cannot decrypt your messages, any such request would be limited to account metadata (email address, phone number, account creation date).
-- **Safety.** If we have a good-faith belief that disclosure is necessary to prevent imminent physical harm to a specific person — for example, a credible and specific threat of violence. Any disclosure in this circumstance would be limited to account metadata (email address, phone number, account creation date). We cannot provide message content because we cannot decrypt it.
+- **Legal compliance.** If required by law or valid legal process. Because we cannot decrypt your messages, any such request would be limited to account metadata (phone number, recovery email if set, account creation date).
+- **Safety.** If we have a good-faith belief that disclosure is necessary to prevent imminent physical harm to a specific person — for example, a credible and specific threat of violence. Any disclosure in this circumstance would be limited to account metadata (phone number, recovery email if set, account creation date). We cannot provide message content because we cannot decrypt it.
 - **Business transfer.** In the event of a merger or acquisition, your information would transfer subject to the same commitments in this policy.
 
 ---

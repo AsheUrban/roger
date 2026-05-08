@@ -1,13 +1,11 @@
 enum OnboardingStep {
-  emailEntry,
-  awaitingEmail,
-  phoneNumber,
+  phoneEntry,
+  otpVerification,
   contactsPermission,
 }
 
 class OnboardingState {
   final OnboardingStep step;
-  final String email;
   final String phoneNumber;
   final String avatarColor;
   final bool isLoading;
@@ -15,8 +13,7 @@ class OnboardingState {
   final bool onboardingComplete;
 
   const OnboardingState({
-    this.step = OnboardingStep.emailEntry,
-    this.email = '',
+    this.step = OnboardingStep.phoneEntry,
     this.phoneNumber = '',
     this.avatarColor = '',
     this.isLoading = false,
@@ -26,7 +23,6 @@ class OnboardingState {
 
   OnboardingState copyWith({
     OnboardingStep? step,
-    String? email,
     String? phoneNumber,
     String? avatarColor,
     bool? isLoading,
@@ -35,7 +31,6 @@ class OnboardingState {
   }) {
     return OnboardingState(
       step: step ?? this.step,
-      email: email ?? this.email,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       avatarColor: avatarColor ?? this.avatarColor,
       isLoading: isLoading ?? this.isLoading,

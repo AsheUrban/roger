@@ -101,7 +101,7 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
         final otherRows = await _client
             .from('conversation_members')
             .select(
-                'id, users(id, email, phone_number, avatar_color, phone_verified, last_active_at, created_at)')
+                'id, users(id, phone_number, avatar_color, recovery_email, last_active_at, created_at)')
             .eq('conversation_id', convId)
             .or('user_id.neq.$currentUserId,user_id.is.null')
             .isFilter('left_at', null);
@@ -124,10 +124,9 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
             );
             members.add(User(
               id: ud['id'] as String,
-              email: ud['email'] as String,
               phoneNumber: ud['phone_number'] as String,
               avatarColor: ud['avatar_color'] as String,
-              phoneVerified: ud['phone_verified'] as bool? ?? false,
+              recoveryEmail: ud['recovery_email'] as String?,
               lastActiveAt: ud['last_active_at'] != null
                   ? DateTime.parse(ud['last_active_at'] as String)
                   : null,

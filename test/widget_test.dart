@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
-import 'package:roger/core/providers.dart';
 import 'package:roger/main.dart';
 
 void main() {
@@ -22,9 +20,6 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          authStateChangesProvider.overrideWith(
-            (ref) => const Stream<AuthState>.empty(),
-          ),
           routerProvider.overrideWithValue(testRouter),
         ],
         child: const RogerApp(),

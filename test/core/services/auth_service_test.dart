@@ -2,8 +2,18 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AuthService', () {
-    group('sendMagicLink', () {
-      test('sends magic link to valid email address', () {
+    group('sendOtp', () {
+      test('sends OTP to valid phone number', () {
+        fail('not implemented');
+      });
+    });
+
+    group('verifyOtp', () {
+      test('verifies OTP and authenticates user', () {
+        fail('not implemented');
+      });
+
+      test('rejects invalid OTP code', () {
         fail('not implemented');
       });
     });
@@ -19,27 +29,23 @@ void main() {
     });
 
     group('createAccount', () {
-      test('requires email, phone number, and avatar color', () {
+      test('requires phone number and avatar color', () {
         fail('not implemented');
       });
 
-      test('existing email logs in instead of creating duplicate', () {
-        fail('not implemented');
-      });
-    });
-
-    group('isPhoneNumberTaken', () {
-      test('returns true when phone number exists', () {
-        fail('not implemented');
-      });
-
-      test('returns false when phone number is available', () {
+      test('existing phone number logs in instead of creating duplicate', () {
         fail('not implemented');
       });
     });
 
     group('updatePhoneNumber', () {
-      test('updates phone number directly (no OTP at MVP)', () {
+      test('updates phone number after OTP verification', () {
+        fail('not implemented');
+      });
+    });
+
+    group('updateRecoveryEmail', () {
+      test('updates recovery email', () {
         fail('not implemented');
       });
     });

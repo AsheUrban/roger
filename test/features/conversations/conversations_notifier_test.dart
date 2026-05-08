@@ -36,7 +36,6 @@ final _conv2 = Conversation(id: 'conv-2', createdAt: DateTime(2026, 1, 2));
 
 final _otherUser = User(
   id: 'other-user',
-  email: 'other@example.com',
   phoneNumber: '+15551111111',
   avatarColor: 'Rust',
   createdAt: DateTime(2026, 1, 1),
@@ -83,9 +82,6 @@ void main() {
         supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
         currentUserIdProvider.overrideWithValue('current-user-id'),
         appDatabaseProvider.overrideWithValue(appDatabase),
-        authStateChangesProvider.overrideWith(
-          (ref) => const Stream<AuthState>.empty(),
-        ),
       ],
     );
   }

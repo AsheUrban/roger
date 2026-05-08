@@ -20,11 +20,6 @@ final currentUserIdProvider = Provider<String?>((ref) {
   return Supabase.instance.client.auth.currentUser?.id;
 });
 
-/// Stream of Supabase auth state changes. Override in tests to provide a mock stream.
-final authStateChangesProvider = StreamProvider<AuthState>((ref) {
-  return Supabase.instance.client.auth.onAuthStateChange;
-});
-
 /// Initialized in main() via ProviderScope override after the DB key is ready.
 /// Throws if accessed before initialization — this is intentional.
 final appDatabaseProvider = Provider<AppDatabase>((ref) {

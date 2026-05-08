@@ -15,7 +15,6 @@ class MockSupabaseClient extends Mock implements SupabaseClient {}
 
 final _rogerUser = User(
   id: 'user-1',
-  email: 'jordan@example.com',
   phoneNumber: '+15551111111',
   avatarColor: 'Rust',
   lastActiveAt: DateTime.now().subtract(const Duration(minutes: 2)),
@@ -50,9 +49,6 @@ Widget _buildWithMockedServices({
       contactsServiceProvider.overrideWithValue(contactsService),
       supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
       currentUserIdProvider.overrideWithValue('current-user-id'),
-      authStateChangesProvider.overrideWith(
-        (ref) => const Stream<AuthState>.empty(),
-      ),
     ],
     child: const MaterialApp(
       home: SearchScreen(),

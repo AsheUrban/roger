@@ -1,18 +1,16 @@
 class User {
   final String id;
-  final String email;
   final String phoneNumber;
   final String avatarColor;
-  final bool phoneVerified;
+  final String? recoveryEmail;
   final DateTime? lastActiveAt;
   final DateTime createdAt;
 
   const User({
     required this.id,
-    required this.email,
     required this.phoneNumber,
     required this.avatarColor,
-    this.phoneVerified = false,
+    this.recoveryEmail,
     this.lastActiveAt,
     required this.createdAt,
   });

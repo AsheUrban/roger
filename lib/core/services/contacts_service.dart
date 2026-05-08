@@ -122,10 +122,9 @@ class ContactsService {
   app.User _userFromRow(Map<String, dynamic> row) {
     return app.User(
       id: row['id'] as String,
-      email: row['email'] as String,
       phoneNumber: row['phone_number'] as String,
       avatarColor: row['avatar_color'] as String,
-      phoneVerified: row['phone_verified'] as bool? ?? false,
+      recoveryEmail: row['recovery_email'] as String?,
       lastActiveAt: row['last_active_at'] != null
           ? DateTime.parse(row['last_active_at'] as String)
           : null,

@@ -15,7 +15,6 @@ class MockSupabaseClient extends Mock implements SupabaseClient {}
 
 final _testUser1 = User(
   id: 'user-1',
-  email: 'jordan@example.com',
   phoneNumber: '+15551111111',
   avatarColor: 'Rust',
   createdAt: DateTime(2026, 1, 1),
@@ -23,7 +22,6 @@ final _testUser1 = User(
 
 final _testUser2 = User(
   id: 'user-2',
-  email: 'casey@example.com',
   phoneNumber: '+15552222222',
   avatarColor: 'Cornflower',
   createdAt: DateTime(2026, 1, 1),
@@ -47,9 +45,6 @@ void main() {
       contactsServiceProvider.overrideWithValue(contactsService),
       supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
       currentUserIdProvider.overrideWithValue('current-user-id'),
-      authStateChangesProvider.overrideWith(
-        (ref) => const Stream<AuthState>.empty(),
-      ),
     ]);
 
     notifier = container.read(searchProvider.notifier);
@@ -145,7 +140,6 @@ void main() {
       test('current user is excluded from results', () async {
         final currentUser = User(
           id: 'current-user-id',
-          email: 'me@example.com',
           phoneNumber: '+15550000000',
           avatarColor: 'Charcoal',
           createdAt: DateTime(2026, 1, 1),

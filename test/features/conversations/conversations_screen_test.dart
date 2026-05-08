@@ -21,7 +21,6 @@ class _FakeConversationsNotifier extends ConversationsNotifier {
 
 final _activeUser = User(
   id: 'user-1',
-  email: 'alex@example.com',
   phoneNumber: '+15551111111',
   avatarColor: 'Rust',
   lastActiveAt: DateTime.now().subtract(const Duration(minutes: 3)),
@@ -30,7 +29,6 @@ final _activeUser = User(
 
 final _inactiveUser = User(
   id: 'user-2',
-  email: 'sam@example.com',
   phoneNumber: '+15552222222',
   avatarColor: 'Cornflower',
   lastActiveAt: DateTime.now().subtract(const Duration(hours: 3)),
