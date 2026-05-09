@@ -72,27 +72,37 @@ class _PhoneEntryStepState extends ConsumerState<_PhoneEntryStep> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 48),
-        InternationalPhoneNumberInput(
-          onInputChanged: (PhoneNumber number) {
-            _phoneNumber = number;
-          },
-          selectorConfig: const SelectorConfig(
-            selectorType: PhoneInputSelectorType.BOTTOM_SHEET,
-            useBottomSheetSafeArea: true,
-            leadingPadding: 12,
+        Container(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: warmWhite.withValues(alpha: 0.3)),
+            ),
           ),
-          textFieldController: _controller,
-          initialValue: _phoneNumber,
-          keyboardType: TextInputType.phone,
-          textStyle: t.inputText,
-          selectorTextStyle: t.inputText,
-          inputDecoration: InputDecoration(
-            hintText: 'Phone number',
-            hintStyle: t.hintText,
-            enabledBorder: t.inputBorderEnabled,
-            focusedBorder: t.inputBorderFocused,
+          child: InternationalPhoneNumberInput(
+            onInputChanged: (PhoneNumber number) {
+              _phoneNumber = number;
+            },
+            selectorConfig: const SelectorConfig(
+              selectorType: PhoneInputSelectorType.BOTTOM_SHEET,
+              useBottomSheetSafeArea: true,
+              leadingPadding: 0,
+              trailingSpace: false,
+            ),
+            spaceBetweenSelectorAndTextField: 8,
+            textFieldController: _controller,
+            initialValue: _phoneNumber,
+            keyboardType: TextInputType.phone,
+            textStyle: t.inputText,
+            selectorTextStyle: t.inputText,
+            inputDecoration: InputDecoration(
+              hintText: 'Phone number',
+              hintStyle: t.hintText,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+            ),
+            cursorColor: warmWhite,
           ),
-          cursorColor: warmWhite,
         ),
         _ErrorText(state.error),
         const SizedBox(height: 24),
