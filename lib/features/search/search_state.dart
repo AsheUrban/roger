@@ -22,6 +22,8 @@ class SearchState {
   final bool hasContactsPermission;
   final bool isLoading;
   final String? error;
+  final bool isGroupMode;
+  final List<String> selectedUserIds;
 
   const SearchState({
     this.query = '',
@@ -29,6 +31,8 @@ class SearchState {
     this.hasContactsPermission = false,
     this.isLoading = false,
     this.error,
+    this.isGroupMode = false,
+    this.selectedUserIds = const [],
   });
 
   SearchState copyWith({
@@ -37,6 +41,8 @@ class SearchState {
     bool? hasContactsPermission,
     bool? isLoading,
     String? Function()? error,
+    bool? isGroupMode,
+    List<String>? selectedUserIds,
   }) {
     return SearchState(
       query: query ?? this.query,
@@ -45,6 +51,8 @@ class SearchState {
           hasContactsPermission ?? this.hasContactsPermission,
       isLoading: isLoading ?? this.isLoading,
       error: error != null ? error() : this.error,
+      isGroupMode: isGroupMode ?? this.isGroupMode,
+      selectedUserIds: selectedUserIds ?? this.selectedUserIds,
     );
   }
 }

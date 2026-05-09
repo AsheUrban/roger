@@ -386,5 +386,74 @@ void main() {
         expect(dana.isOnRoger, false);
       });
     });
+
+    group('group mode', () {
+      setUp(() async {
+        when(() => contactsService.refreshBatchCheck())
+            .thenAnswer((_) async {});
+        when(() => contactsService.cachedContacts).thenReturn([
+          (name: 'Jordan B', phoneNumber: '+15550001000'),
+          (name: 'Casey L', phoneNumber: '+15550002000'),
+          (name: 'Dana R', phoneNumber: '+15550003000'),
+        ]);
+        when(() => contactsService.cachedRogerUsers)
+            .thenReturn([_testUser1, _testUser2]);
+        await notifier.loadInitialContacts();
+      });
+
+      test('enterGroupMode sets isGroupMode true', () {
+        notifier.enterGroupMode();
+
+        final state = container.read(searchProvider);
+        expect(state.isGroupMode, true);
+        expect(state.selectedUserIds, isEmpty);
+      });
+
+      test('exitGroupMode clears selection and mode', () {
+        notifier.enterGroupMode();
+        notifier.toggleContactSelection(_testUser1.id);
+        notifier.exitGroupMode();
+
+        final state = container.read(searchProvider);
+        expect(state.isGroupMode, false);
+        expect(state.selectedUserIds, isEmpty);
+      });
+
+      test('toggleContactSelection adds and removes user', () {
+        notifier.enterGroupMode();
+
+        notifier.toggleContactSelection(_testUser1.id);
+        expect(container.read(searchProvider).selectedUserIds,
+            contains(_testUser1.id));
+
+        notifier.toggleContactSelection(_testUser1.id);
+        expect(container.read(searchProvider).selectedUserIds,
+            isNot(contains(_testUser1.id)));
+      });
+
+      test('cannot select more than 4 members (you are the 5th)', () {
+        notifier.enterGroupMode();
+
+        // Create 5 fake users to try selecting
+        for (var i = 0; i < 5; i++) {
+          notifier.toggleContactSelection('user-$i');
+        }
+
+        final state = container.read(searchProvider);
+        expect(state.selectedUserIds.length, 4);
+      });
+
+      test('enterGroupModeWithContact enters mode with contact pre-selected',
+          () {
+        notifier.enterGroupModeWithContact(_testUser1.id);
+
+        final state = container.read(searchProvider);
+        expect(state.isGroupMode, true);
+        expect(state.selectedUserIds, contains(_testUser1.id));
+      });
+
+      test('createGroupConversation creates conversation with selected members',
+          skip: 'Integration test — requires real Supabase', () {});
+    });
   });
 }

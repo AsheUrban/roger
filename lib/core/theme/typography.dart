@@ -20,13 +20,25 @@ final wordmarkHeader = GoogleFonts.youngSerif(
 );
 
 // ── Headers / Display ─────────────────────────────────────────────────────────
-final headerSyne = GoogleFonts.syne(
-  fontSize: 15,
+final screenTitle = GoogleFonts.syne(
+  fontSize: 22,
   fontWeight: FontWeight.w700,
   color: warmWhite,
 );
 
-// ── Screen titles ─────────────────────────────────────────────────────────────
+final rowName = GoogleFonts.syne(
+  fontSize: 15,
+  fontWeight: FontWeight.w600,
+  color: warmWhite,
+);
+
+final pillLabel = GoogleFonts.syne(
+  fontSize: 12,
+  fontWeight: FontWeight.w600,
+  color: warmWhite,
+);
+
+// ── Screen titles (non-Syne) ─────────────────────────────────────────────────
 const titleLarge = TextStyle(
   color: warmWhite,
   fontSize: 24,
@@ -58,6 +70,39 @@ final bodyFaint = TextStyle(
   fontSize: 12,
 );
 
+// ── Secondary / timestamps ────────────────────────────────────────────────────
+final timestamp = TextStyle(
+  fontSize: 12,
+  color: warmWhite.withValues(alpha: 0.4),
+);
+
+final placeholderText = TextStyle(
+  fontSize: 14,
+  color: warmWhite.withValues(alpha: 0.4),
+);
+
+final searchHint = TextStyle(
+  fontSize: 14,
+  color: warmWhite.withValues(alpha: 0.3),
+);
+
+const activeNow = TextStyle(
+  fontSize: 12,
+  color: oliveLight,
+);
+
+// ── Avatars ───────────────────────────────────────────────────────────────────
+// Color comes from the avatar color map — only size/weight shared here
+const avatarInitialLarge = TextStyle(
+  fontSize: 18,
+  fontWeight: FontWeight.w600,
+);
+
+const avatarInitialMini = TextStyle(
+  fontSize: 9,
+  fontWeight: FontWeight.w700,
+);
+
 // ── Input fields ──────────────────────────────────────────────────────────────
 const inputText = TextStyle(
   color: warmWhite,
@@ -85,3 +130,17 @@ const errorText = TextStyle(
 const buttonLabel = TextStyle(
   color: warmWhite,
 );
+
+// ── Invite text ───────────────────────────────────────────────────────────────
+final inviteArrow = GoogleFonts.syne(
+  fontSize: 13,
+  color: warmWhite.withValues(alpha: 0.6),
+);
+
+final pendingLabel = TextStyle(
+  fontSize: 12,
+  color: warmWhite.withValues(alpha: 0.4),
+);
+
+// ── Shared decoration ─────────────────────────────────────────────────────────
+final listDividerColor = Colors.white.withValues(alpha: 0.06);

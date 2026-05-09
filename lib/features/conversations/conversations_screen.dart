@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/models/user.dart';
 import '../../core/theme/colors.dart';
+import '../../core/theme/typography.dart' as t;
 import '../../core/utils/time_format.dart';
 import 'conversations_notifier.dart';
 import 'conversations_state.dart';
@@ -25,13 +25,7 @@ class ConversationsScreen extends ConsumerWidget {
             // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-              child: Text(
-                'roger',
-                style: GoogleFonts.youngSerif(
-                  fontSize: 28,
-                  color: warmWhite,
-                ),
-              ),
+              child: Text('roger', style: t.wordmarkHeader),
             ),
 
             // Body
@@ -52,21 +46,18 @@ class ConversationsScreen extends ConsumerWidget {
                           child: Text(
                             'No conversations yet.\nGo to Search to start one.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: warmWhite.withValues(alpha: 0.4),
-                              fontSize: 14,
-                            ),
+                            style: t.placeholderText,
                           ),
                         )
                       : ListView.separated(
                           itemCount: state.conversations.length,
-                          separatorBuilder: (_, _) => Padding(
+                          separatorBuilder: (_, __) => Padding(
                             padding:
                                 const EdgeInsets.symmetric(horizontal: 20),
                             child: Divider(
                               height: 0.5,
                               thickness: 0.5,
-                              color: Colors.white.withValues(alpha: 0.06),
+                              color: t.listDividerColor,
                             ),
                           ),
                           itemBuilder: (context, index) {
@@ -87,7 +78,7 @@ class ConversationsScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(16),
                 child: Text(
                   state.error!,
-                  style: const TextStyle(color: errorColor, fontSize: 14),
+                  style: t.errorText,
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -143,11 +134,7 @@ class _ConversationRow extends StatelessWidget {
                       Expanded(
                         child: Text(
                           summary.displayName,
-                          style: GoogleFonts.syne(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: warmWhite,
-                          ),
+                          style: t.rowName,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -156,10 +143,7 @@ class _ConversationRow extends StatelessWidget {
                           padding: const EdgeInsets.only(left: 8),
                           child: Text(
                             formatShortAge(summary.lastMessageAt!),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: warmWhite.withValues(alpha: 0.4),
-                            ),
+                            style: t.timestamp,
                           ),
                         ),
                     ],
@@ -189,29 +173,15 @@ class _ConversationRow extends StatelessWidget {
     );
   }
 
-  // Bottom line: "● active now" (olive) | "active Xm ago" | nothing
-  // Falls back to lastMessageAt when otherUserLastActiveAt is absent.
   Widget _lastActiveText(ConversationSummary s) {
     if (s.isOtherUserActive) {
-      return Text(
-        '● active now',
-        style: TextStyle(
-          fontSize: 12,
-          color: oliveLight,
-        ),
-      );
+      return const Text('● active now', style: t.activeNow);
     }
 
     final activeAt = s.otherUserLastActiveAt ?? s.lastMessageAt;
     if (activeAt == null) return const SizedBox.shrink();
 
-    return Text(
-      formatLastActive(activeAt),
-      style: TextStyle(
-        fontSize: 12,
-        color: warmWhite.withValues(alpha: 0.4),
-      ),
-    );
+    return Text(formatLastActive(activeAt), style: t.timestamp);
   }
 }
 
@@ -248,11 +218,7 @@ class _SingleAvatar extends StatelessWidget {
             child: Center(
               child: Text(
                 initial,
-                style: TextStyle(
-                  color: colors.$2,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: t.avatarInitialLarge.copyWith(color: colors.$2),
               ),
             ),
           ),
@@ -329,11 +295,7 @@ class _MiniAvatar extends StatelessWidget {
       child: Center(
         child: Text(
           initial,
-          style: TextStyle(
-            color: colors.$2,
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-          ),
+          style: t.avatarInitialMini.copyWith(color: colors.$2),
         ),
       ),
     );

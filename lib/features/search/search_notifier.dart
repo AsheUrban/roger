@@ -266,4 +266,65 @@ class SearchNotifier extends Notifier<SearchState> {
 
     return results;
   }
+
+  // ── Group mode ──────────────────────────────────────────────────────────
+
+  void enterGroupMode() {
+    state = state.copyWith(isGroupMode: true, selectedUserIds: []);
+  }
+
+  void enterGroupModeWithContact(String userId) {
+    state = state.copyWith(isGroupMode: true, selectedUserIds: [userId]);
+  }
+
+  void exitGroupMode() {
+    state = state.copyWith(isGroupMode: false, selectedUserIds: []);
+  }
+
+  void toggleContactSelection(String userId) {
+    final current = List<String>.from(state.selectedUserIds);
+    if (current.contains(userId)) {
+      current.remove(userId);
+    } else {
+      // Groups capped at 5 — you + 4 others
+      if (current.length >= 4) return;
+      current.add(userId);
+    }
+    state = state.copyWith(selectedUserIds: current);
+  }
+
+  /// Create a group conversation with the selected members.
+  Future<String> createGroupConversation({String? name}) async {
+    final currentUserId = _currentUserId!;
+    final now = DateTime.now().toUtc().toIso8601String();
+
+    final conv = await _client
+        .from('conversations')
+        .insert({
+          'name': name,
+          'created_at': now,
+        })
+        .select('id')
+        .single();
+
+    final convId = conv['id'] as String;
+
+    final members = [
+      {
+        'conversation_id': convId,
+        'user_id': currentUserId,
+        'joined_at': now,
+      },
+      ...state.selectedUserIds.map((uid) => {
+            'conversation_id': convId,
+            'user_id': uid,
+            'joined_at': now,
+          }),
+    ];
+
+    await _client.from('conversation_members').insert(members);
+
+    exitGroupMode();
+    return convId;
+  }
 }
