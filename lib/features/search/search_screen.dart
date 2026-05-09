@@ -95,9 +95,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                     controller: _searchController,
                                     focusNode: _focusNode,
                                     onChanged: notifier.search,
-                                    style: const TextStyle(
+                                    style: t.searchHint.copyWith(
                                       color: warmWhite,
-                                      fontSize: 14,
                                     ),
                                     decoration: InputDecoration(
                                       hintText: 'Search contacts',
@@ -164,14 +163,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             Expanded(
               child: state.isLoading
                   ? const Center(
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: warmWhite,
-                        ),
-                      ),
+                      child: t.loadingSpinner,
                     )
                   : state.results.isEmpty
                       ? _EmptyState(query: state.query)

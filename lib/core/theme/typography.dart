@@ -144,3 +144,13 @@ final pendingLabel = TextStyle(
 
 // ── Shared decoration ─────────────────────────────────────────────────────────
 final listDividerColor = Colors.white.withValues(alpha: 0.06);
+
+// ── Shared widgets ────────────────────────────────────────────────────────
+const loadingSpinner = SizedBox(
+  width: 20,
+  height: 20,
+  child: CircularProgressIndicator(
+    strokeWidth: 2,
+    color: warmWhite,
+  ),
+);

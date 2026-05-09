@@ -310,14 +310,7 @@ class _PrimaryButton extends StatelessWidget {
           ),
         ),
         child: isLoading
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: warmWhite,
-                ),
-              )
+            ? t.loadingSpinner
             : Text(label, style: t.bodyText),
       ),
     );

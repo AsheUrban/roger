@@ -6,6 +6,7 @@ import '../../core/models/user.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart' as t;
 import '../../core/utils/time_format.dart';
+import '../search/search_notifier.dart';
 import 'conversations_notifier.dart';
 import 'conversations_state.dart';
 
@@ -32,14 +33,7 @@ class ConversationsScreen extends ConsumerWidget {
             Expanded(
               child: state.isLoading
                   ? const Center(
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: warmWhite,
-                        ),
-                      ),
+                      child: t.loadingSpinner,
                     )
                   : state.conversations.isEmpty
                       ? Center(
@@ -84,6 +78,48 @@ class ConversationsScreen extends ConsumerWidget {
               ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            backgroundColor: charcoal2,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            builder: (_) => SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      leading: Icon(Icons.chat_bubble_outline,
+                          color: warmWhite.withValues(alpha: 0.6), size: 22),
+                      title: Text('New chat', style: t.rowName),
+                      onTap: () {
+                        Navigator.pop(context);
+                        context.go('/search');
+                      },
+                    ),
+                    ListTile(
+                      leading: Icon(Icons.group_add_outlined,
+                          color: warmWhite.withValues(alpha: 0.6), size: 22),
+                      title: Text('New group', style: t.rowName),
+                      onTap: () {
+                        Navigator.pop(context);
+                        ref.read(searchProvider.notifier).enterGroupMode();
+                        context.go('/search');
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+        backgroundColor: charcoal2,
+        child: const Icon(Icons.add, color: warmWhite),
       ),
     );
   }
