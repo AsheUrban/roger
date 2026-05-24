@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart' as t;
 import '../../core/utils/time_format.dart';
+import '../../core/widgets/primary_action_pill.dart';
 import 'search_notifier.dart';
 import 'search_state.dart';
 
@@ -33,6 +34,26 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _searchController.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _openGroupNameSheet(SearchNotifier notifier) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: charcoal2,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) => _GroupNameSheet(
+        onConfirm: (name) async {
+          Navigator.pop(sheetContext);
+          final convId = await notifier.createGroupConversation(name: name);
+          if (mounted) {
+            context.go('/camera/$convId');
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -239,36 +260,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       '${state.selectedUserIds.length} of 4 selected',
                       style: t.bodyDimmed,
                     ),
-                    GestureDetector(
-                      onTap: state.selectedUserIds.length >= 2
-                          ? () async {
-                              final convId =
-                                  await notifier.createGroupConversation();
-                              if (context.mounted) {
-                                context.go('/camera/$convId');
-                              }
-                            }
-                          : null,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: state.selectedUserIds.length >= 2
-                              ? warmWhite
-                              : warmWhite.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          'Create',
-                          style: TextStyle(
-                            color: state.selectedUserIds.length >= 2
-                                ? charcoal
-                                : warmWhite.withValues(alpha: 0.3),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
+                    PrimaryActionPill(
+                      key: const Key('group-create-button'),
+                      label: 'Create',
+                      enabled: state.selectedUserIds.length >= 2,
+                      onTap: () => _openGroupNameSheet(notifier),
                     ),
                   ],
                 ),
@@ -397,6 +393,76 @@ class _SearchResultRow extends StatelessWidget {
                     child: Text('Invite \u2192', style: t.inviteArrow),
                   ),
               ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupNameSheet extends StatefulWidget {
+  final ValueChanged<String?> onConfirm;
+
+  const _GroupNameSheet({required this.onConfirm});
+
+  @override
+  State<_GroupNameSheet> createState() => _GroupNameSheetState();
+}
+
+class _GroupNameSheetState extends State<_GroupNameSheet> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Container(
+          key: const Key('group-name-sheet'),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Group name (optional)', style: t.rowName),
+              const SizedBox(height: 12),
+              TextField(
+                key: const Key('group-name-field'),
+                controller: _controller,
+                maxLength: 50,
+                autofocus: true,
+                style: t.inputText,
+                cursorColor: warmWhite,
+                decoration: InputDecoration(
+                  hintStyle: t.hintText,
+                  enabledBorder: t.inputBorderEnabled,
+                  focusedBorder: t.inputBorderFocused,
+                  counterText: '',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: PrimaryActionPill(
+                  key: const Key('group-name-confirm'),
+                  label: 'Create',
+                  enabled: true,
+                  onTap: () {
+                    final trimmed = _controller.text.trim();
+                    widget.onConfirm(trimmed.isEmpty ? null : trimmed);
+                  },
+                ),
+              ),
             ],
           ),
         ),

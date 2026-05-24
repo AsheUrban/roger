@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:roger/core/models/user.dart';
 import 'package:roger/core/providers.dart';
@@ -35,9 +36,15 @@ Widget _buildWithFakeState({required SearchState state}) {
 
 class _FakeSearchNotifier extends SearchNotifier {
   final SearchState _initialState;
+  final List<String?> createGroupCalls = [];
   _FakeSearchNotifier(this._initialState);
   @override
   SearchState build() => _initialState;
+  @override
+  Future<String> createGroupConversation({String? name}) async {
+    createGroupCalls.add(name);
+    return 'fake-conv-id';
+  }
 }
 
 // For interaction tests — real notifier, mocked services
@@ -53,6 +60,27 @@ Widget _buildWithMockedServices({
     child: const MaterialApp(
       home: SearchScreen(),
     ),
+  );
+}
+
+// For group-name-prompt tests — fake notifier in group mode with a router
+// stubbed for the post-create navigation to /camera/:id.
+Widget _buildWithFakeNotifier(_FakeSearchNotifier notifier) {
+  final router = GoRouter(
+    initialLocation: '/',
+    routes: [
+      GoRoute(path: '/', builder: (_, __) => const SearchScreen()),
+      GoRoute(
+        path: '/camera/:id',
+        builder: (_, __) => const SizedBox.shrink(),
+      ),
+    ],
+  );
+  return ProviderScope(
+    overrides: [
+      searchProvider.overrideWith(() => notifier),
+    ],
+    child: MaterialApp.router(routerConfig: router),
   );
 }
 
@@ -228,5 +256,146 @@ void main() {
       // Nav bar is part of _RogerShell, not SearchScreen.
       // Test via integration test with full router.
     }, skip: true);
+
+    group('group name prompt', () {
+      // Initial state used by every test in this group: in group mode with
+      // two selected users — the minimum required for the Create button to
+      // be enabled.
+      const groupModeState = SearchState(
+        hasContactsPermission: true,
+        isGroupMode: true,
+        selectedUserIds: ['u-1', 'u-2'],
+      );
+
+      testWidgets('tapping Create with 2+ selected opens the name sheet',
+          (tester) async {
+        final notifier = _FakeSearchNotifier(groupModeState);
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('group-create-button')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('group-name-sheet')), findsOneWidget);
+        expect(notifier.createGroupCalls, isEmpty);
+      });
+
+      testWidgets('sheet shows title, text field, and Create button',
+          (tester) async {
+        final notifier = _FakeSearchNotifier(groupModeState);
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('group-create-button')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Group name (optional)'), findsOneWidget);
+        expect(find.byKey(const Key('group-name-field')), findsOneWidget);
+        expect(find.byKey(const Key('group-name-confirm')), findsOneWidget);
+      });
+
+      testWidgets(
+          'submitting a name calls createGroupConversation with that name',
+          (tester) async {
+        final notifier = _FakeSearchNotifier(groupModeState);
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('group-create-button')));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(
+            find.byKey(const Key('group-name-field')), 'Game Night');
+        await tester.tap(find.byKey(const Key('group-name-confirm')));
+        await tester.pumpAndSettle();
+
+        expect(notifier.createGroupCalls, ['Game Night']);
+      });
+
+      testWidgets('submitting whitespace-padded name trims before passing',
+          (tester) async {
+        final notifier = _FakeSearchNotifier(groupModeState);
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('group-create-button')));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(
+            find.byKey(const Key('group-name-field')), '  Game Night  ');
+        await tester.tap(find.byKey(const Key('group-name-confirm')));
+        await tester.pumpAndSettle();
+
+        expect(notifier.createGroupCalls, ['Game Night']);
+      });
+
+      testWidgets('submitting empty calls createGroupConversation with null',
+          (tester) async {
+        final notifier = _FakeSearchNotifier(groupModeState);
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('group-create-button')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('group-name-confirm')));
+        await tester.pumpAndSettle();
+
+        expect(notifier.createGroupCalls, [null]);
+      });
+
+      testWidgets(
+          'submitting whitespace-only calls createGroupConversation with null',
+          (tester) async {
+        final notifier = _FakeSearchNotifier(groupModeState);
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('group-create-button')));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(
+            find.byKey(const Key('group-name-field')), '     ');
+        await tester.tap(find.byKey(const Key('group-name-confirm')));
+        await tester.pumpAndSettle();
+
+        expect(notifier.createGroupCalls, [null]);
+      });
+
+      testWidgets('dismissing the sheet does not call createGroupConversation',
+          (tester) async {
+        final notifier = _FakeSearchNotifier(groupModeState);
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('group-create-button')));
+        await tester.pumpAndSettle();
+
+        // Tap the scrim above the sheet to dismiss it.
+        await tester.tapAt(const Offset(20, 20));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('group-name-sheet')), findsNothing);
+        expect(notifier.createGroupCalls, isEmpty);
+      });
+
+      testWidgets('text field caps input at 50 characters', (tester) async {
+        final notifier = _FakeSearchNotifier(groupModeState);
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('group-create-button')));
+        await tester.pumpAndSettle();
+
+        // 60-character string — 10 over the cap.
+        final tooLong = 'a' * 60;
+        await tester.enterText(
+            find.byKey(const Key('group-name-field')), tooLong);
+        await tester.tap(find.byKey(const Key('group-name-confirm')));
+        await tester.pumpAndSettle();
+
+        expect(notifier.createGroupCalls, ['a' * 50]);
+      });
+    });
   });
 }
