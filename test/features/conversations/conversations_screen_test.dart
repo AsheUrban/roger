@@ -80,7 +80,7 @@ Widget _buildWithRouter({required ConversationsState state}) {
     routes: [
       GoRoute(
         path: '/conversations',
-        builder: (_, __) => const ConversationsScreen(),
+        builder: (_, _) => const ConversationsScreen(),
       ),
       GoRoute(
         path: '/camera/:conversationId',

@@ -18,6 +18,12 @@ class AppDatabase extends _$AppDatabase {
 }
 
 /// Opens the encrypted database. Called once in main() after the key is ready.
+///
+/// Encryption is provided by SQLite3MultipleCiphers (`sqlite3mc`), selected
+/// via the `hooks.user_defines.sqlite3.source` block in pubspec.yaml. The
+/// hook ships prebuilt native binaries for every supported platform, so no
+/// runtime `open.overrideFor(...)` plumbing is needed. `PRAGMA key` is
+/// honored by sqlite3mc out of the box.
 Future<AppDatabase> openAppDatabase(String key) async {
   final dir = await getApplicationDocumentsDirectory();
   final file = File(p.join(dir.path, 'roger.db'));

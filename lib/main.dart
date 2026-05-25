@@ -7,7 +7,9 @@ import 'core/config/env.dart';
 import 'core/database/app_database.dart';
 import 'core/providers.dart';
 import 'core/services/database_key_service.dart';
+import 'core/theme/colors.dart';
 import 'features/conversations/conversations_screen.dart';
+import 'features/search/search_notifier.dart';
 import 'features/search/search_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
@@ -113,11 +115,37 @@ Future<void> main() async {
   ));
 }
 
-class RogerApp extends ConsumerWidget {
+class RogerApp extends ConsumerStatefulWidget {
   const RogerApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RogerApp> createState() => _RogerAppState();
+}
+
+class _RogerAppState extends ConsumerState<RogerApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Fire-and-forget — refreshContacts has its own in-flight guard.
+      ref.read(searchProvider.notifier).refreshContacts();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
@@ -143,6 +171,7 @@ class _RogerShell extends StatelessWidget {
     };
 
     return Scaffold(
+      backgroundColor: charcoal,
       body: child,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: index,
@@ -155,6 +184,14 @@ class _RogerShell extends StatelessWidget {
           };
           context.go(path);
         },
+        // Spec §4: warm white for active nav state. Labels never shown.
+        backgroundColor: charcoal,
+        type: BottomNavigationBarType.fixed,
+        elevation: 0,
+        selectedItemColor: warmWhite,
+        unselectedItemColor: warmWhite.withValues(alpha: 0.4),
+        showSelectedLabels: false,
+        showUnselectedLabels: false,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble_outline),

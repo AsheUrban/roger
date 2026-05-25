@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -71,7 +69,7 @@ void main() {
 
   tearDown(() async => appDatabase.close());
 
-  ProviderContainer _makeContainer({ConversationsState? seed}) {
+  ProviderContainer makeContainer({ConversationsState? seed}) {
     return ProviderContainer(
       overrides: [
         if (seed != null)
@@ -89,7 +87,7 @@ void main() {
   group('ConversationsNotifier', () {
     group('initial state', () {
       test('starts with empty list, not loading, no error', () {
-        final container = _makeContainer();
+        final container = makeContainer();
         addTearDown(container.dispose);
 
         final state = container.read(conversationsProvider);
@@ -130,7 +128,7 @@ void main() {
             ),
           ],
         );
-        final container = _makeContainer(seed: seed);
+        final container = makeContainer(seed: seed);
         addTearDown(container.dispose);
 
         container.read(conversationsProvider.notifier).onNewMessage(
@@ -153,7 +151,7 @@ void main() {
             ),
           ],
         );
-        final container = _makeContainer(seed: seed);
+        final container = makeContainer(seed: seed);
         addTearDown(container.dispose);
 
         container.read(conversationsProvider.notifier).onNewMessage(
@@ -174,7 +172,7 @@ void main() {
             _makeSummary(conversation: _conv1, lastMessageAt: original),
           ],
         );
-        final container = _makeContainer(seed: seed);
+        final container = makeContainer(seed: seed);
         addTearDown(container.dispose);
 
         container.read(conversationsProvider.notifier).onNewMessage(
@@ -199,7 +197,7 @@ void main() {
             _makeSummary(conversation: _conv1, lastMessageAt: older),
           ],
         );
-        final container = _makeContainer(seed: seed);
+        final container = makeContainer(seed: seed);
         addTearDown(container.dispose);
 
         // New message for conv1 makes it the most recent
@@ -230,7 +228,7 @@ void main() {
             ),
           ],
         );
-        final container = _makeContainer(seed: seed);
+        final container = makeContainer(seed: seed);
         addTearDown(container.dispose);
 
         container.read(conversationsProvider.notifier).onNewMessage(

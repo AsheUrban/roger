@@ -45,7 +45,7 @@ class ConversationsScreen extends ConsumerWidget {
                         )
                       : ListView.separated(
                           itemCount: state.conversations.length,
-                          separatorBuilder: (_, __) => Padding(
+                          separatorBuilder: (_, _) => Padding(
                             padding:
                                 const EdgeInsets.symmetric(horizontal: 20),
                             child: Divider(

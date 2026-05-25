@@ -37,6 +37,8 @@ Widget _buildWithFakeState({required SearchState state}) {
 class _FakeSearchNotifier extends SearchNotifier {
   final SearchState _initialState;
   final List<String?> createGroupCalls = [];
+  int refreshContactsCalls = 0;
+  Future<void>? _refreshFuture;
   _FakeSearchNotifier(this._initialState);
   @override
   SearchState build() => _initialState;
@@ -44,6 +46,18 @@ class _FakeSearchNotifier extends SearchNotifier {
   Future<String> createGroupConversation({String? name}) async {
     createGroupCalls.add(name);
     return 'fake-conv-id';
+  }
+
+  @override
+  Future<void> refreshContacts() async {
+    refreshContactsCalls++;
+    if (_refreshFuture != null) await _refreshFuture;
+  }
+
+  /// Test helper: hold the refresh open until [completer] completes.
+  /// Lets a test assert that the loading indicator appears during refresh.
+  void holdRefreshUntil(Future<void> future) {
+    _refreshFuture = future;
   }
 }
 
@@ -69,10 +83,10 @@ Widget _buildWithFakeNotifier(_FakeSearchNotifier notifier) {
   final router = GoRouter(
     initialLocation: '/',
     routes: [
-      GoRoute(path: '/', builder: (_, __) => const SearchScreen()),
+      GoRoute(path: '/', builder: (_, _) => const SearchScreen()),
       GoRoute(
         path: '/camera/:id',
-        builder: (_, __) => const SizedBox.shrink(),
+        builder: (_, _) => const SizedBox.shrink(),
       ),
     ],
   );
@@ -253,8 +267,8 @@ void main() {
     });
 
     testWidgets('nav bar visible with Search tab', (tester) async {
-      // Nav bar is part of _RogerShell, not SearchScreen.
-      // Test via integration test with full router.
+      // Integration test — _RogerShell only mounts under the full router,
+      // not in SearchScreen widget tests in isolation.
     }, skip: true);
 
     group('group name prompt', () {
@@ -397,5 +411,47 @@ void main() {
         expect(notifier.createGroupCalls, ['a' * 50]);
       });
     });
+
+    group('pull-to-refresh', () {
+      // A SearchState with permission granted and at least one rendered row,
+      // so the RefreshIndicator has scrollable content underneath it.
+      final readyState = SearchState(
+        hasContactsPermission: true,
+        results: [
+          SearchResult(
+            rogerUser: _rogerUser,
+            contactName: 'Henrietta',
+            phoneNumber: '+15550001000',
+            isOnRoger: true,
+          ),
+        ],
+      );
+
+      testWidgets('pull-to-refresh gesture calls refreshContacts',
+          (tester) async {
+        final notifier = _FakeSearchNotifier(readyState);
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        // Drag the list down to trigger RefreshIndicator
+        await tester.fling(
+            find.byKey(const Key('search-results-list')),
+            const Offset(0, 400),
+            1000);
+        await tester.pumpAndSettle();
+
+        expect(notifier.refreshContactsCalls, 1);
+      });
+
+      testWidgets('RefreshIndicator wraps the contact list',
+          (tester) async {
+        final notifier = _FakeSearchNotifier(readyState);
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(RefreshIndicator), findsOneWidget);
+      });
+    });
   });
 }
+

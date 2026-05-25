@@ -66,18 +66,22 @@ void main() {
 
     group('permissions', () {
       test('requestPermission returns grant status',
-          skip: true, () {});
+          skip: 'Integration test — needs real permission_handler',
+          () {});
 
       test('hasPermission checks current state',
-          skip: true, () {});
+          skip: 'Integration test — needs real permission_handler',
+          () {});
     });
 
     group('batch check', () {
       test('sends hashes to server, returns matching roger users',
-          skip: true, () {});
+          skip: 'Integration test — needs real Supabase',
+          () {});
 
       test('raw numbers never leave device — only hashes sent',
-          skip: true, () {});
+          skip: 'Integration test — needs real Supabase',
+          () {});
     });
 
     group('on-demand search', () {

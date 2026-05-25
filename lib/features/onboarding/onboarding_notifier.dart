@@ -5,19 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/contacts_service.dart';
+import '../../core/theme/colors.dart';
 import 'onboarding_state.dart';
 
-const avatarColors = [
-  'Deep Red',
-  'Rust',
-  'Deep Ember',
-  'Burnt Orange',
-  'Salmon',
-  'Rose',
-  'Olive',
-  'Cornflower',
-  'Charcoal',
-];
+// Single source of truth — derived from the avatar color map so the random
+// pick can never include a color that isn't actually defined.
+final avatarColors = avatarColorMap.keys.toList();
 
 final onboardingProvider =
     NotifierProvider<OnboardingNotifier, OnboardingState>(

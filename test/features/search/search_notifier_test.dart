@@ -6,11 +6,12 @@ import 'package:mocktail/mocktail.dart';
 import 'package:roger/core/models/user.dart';
 import 'package:roger/core/providers.dart';
 import 'package:roger/core/services/contacts_service.dart';
+import 'package:roger/core/services/conversation_service.dart';
 import 'package:roger/features/search/search_notifier.dart';
-import 'package:roger/features/search/search_state.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 class MockContactsService extends Mock implements ContactsService {}
+class MockConversationService extends Mock implements ConversationService {}
 class MockSupabaseClient extends Mock implements SupabaseClient {}
 
 final _testUser1 = User(
@@ -29,11 +30,13 @@ final _testUser2 = User(
 
 void main() {
   late MockContactsService contactsService;
+  late MockConversationService conversationService;
   late ProviderContainer container;
   late SearchNotifier notifier;
 
   setUp(() {
     contactsService = MockContactsService();
+    conversationService = MockConversationService();
 
     // Default: no permission, empty caches
     when(() => contactsService.hasPermission())
@@ -43,6 +46,7 @@ void main() {
 
     container = ProviderContainer(overrides: [
       contactsServiceProvider.overrideWithValue(contactsService),
+      conversationServiceProvider.overrideWithValue(conversationService),
       supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
       currentUserIdProvider.overrideWithValue('current-user-id'),
     ]);
@@ -348,21 +352,30 @@ void main() {
 
     group('startChat', () {
       test('opens existing conversation if 1:1 already exists',
-          skip: true, () {});
-
-      test('creates new conversation if none exists',
-          skip: true, () {});
+          skip: 'Integration test — existing-conversation lookup hits real Supabase',
+          () {});
 
       test('never creates duplicate conversation',
-          skip: true, () {});
+          skip: 'Integration test — existing-conversation lookup hits real Supabase',
+          () {});
+
+      test(
+          'creates new conversation via ConversationService with both members',
+          skip:
+              'Integration test — the existing-conv lookup runs before create, '
+              'and that lookup hits real Supabase. Service call itself is '
+              'covered by group-create test below using the same RPC path.',
+          () {});
     });
 
     group('sendInvite', () {
       test('creates pending invite with 7-day expiry',
-          skip: true, () {});
+          skip: 'Integration test — InviteService writes hit real Supabase',
+          () {});
 
       test('marks contact as having pending invite in state',
-          skip: true, () {});
+          skip: 'Integration test — InviteService writes hit real Supabase',
+          () {});
 
       test('only available for contacts NOT on roger', () async {
         when(() => contactsService.refreshBatchCheck())
@@ -452,8 +465,147 @@ void main() {
         expect(state.selectedUserIds, contains(_testUser1.id));
       });
 
-      test('createGroupConversation creates conversation with selected members',
-          skip: 'Integration test — requires real Supabase', () {});
+      test(
+          'createGroupConversation calls ConversationService with name '
+          'and the selected members plus the current user',
+          () async {
+        notifier.enterGroupMode();
+        notifier.toggleContactSelection(_testUser1.id);
+        notifier.toggleContactSelection(_testUser2.id);
+
+        when(() => conversationService.createConversation(
+              name: any(named: 'name'),
+              memberIds: any(named: 'memberIds'),
+            )).thenAnswer((_) async => 'new-conv-id');
+
+        final convId =
+            await notifier.createGroupConversation(name: 'Game Night');
+
+        expect(convId, 'new-conv-id');
+        verify(() => conversationService.createConversation(
+              name: 'Game Night',
+              memberIds: any(
+                named: 'memberIds',
+                that: containsAll(
+                    [_testUser1.id, _testUser2.id, 'current-user-id']),
+              ),
+            )).called(1);
+        // Exits group mode after creating
+        expect(container.read(searchProvider).isGroupMode, false);
+      });
+
+      test(
+          'createGroupConversation passes null name when no name provided',
+          () async {
+        notifier.enterGroupMode();
+        notifier.toggleContactSelection(_testUser1.id);
+        notifier.toggleContactSelection(_testUser2.id);
+
+        when(() => conversationService.createConversation(
+              name: any(named: 'name'),
+              memberIds: any(named: 'memberIds'),
+            )).thenAnswer((_) async => 'new-conv-id');
+
+        await notifier.createGroupConversation();
+
+        verify(() => conversationService.createConversation(
+              name: null,
+              memberIds: any(named: 'memberIds'),
+            )).called(1);
+      });
+    });
+
+    group('refreshContacts', () {
+      test('calls refreshBatchCheck and rebuilds results', () async {
+        when(() => contactsService.hasPermission())
+            .thenAnswer((_) async => true);
+        when(() => contactsService.refreshBatchCheck())
+            .thenAnswer((_) async {});
+        when(() => contactsService.cachedContacts).thenReturn([
+          (name: 'Henrietta', phoneNumber: '+15550001000'),
+        ]);
+        when(() => contactsService.cachedRogerUsers)
+            .thenReturn([_testUser1]);
+
+        // Prime the notifier so it knows permission is granted
+        await notifier.loadInitialContacts();
+        clearInteractions(contactsService);
+
+        // Now swap caches and call refresh — results should pick up new data
+        when(() => contactsService.cachedContacts).thenReturn([
+          (name: 'Henrietta', phoneNumber: '+15550001000'),
+          (name: 'Thanos', phoneNumber: '+15550002000'),
+        ]);
+        when(() => contactsService.refreshBatchCheck())
+            .thenAnswer((_) async {});
+
+        await notifier.refreshContacts();
+
+        verify(() => contactsService.refreshBatchCheck()).called(1);
+        final state = container.read(searchProvider);
+        expect(state.results.length, 2);
+      });
+
+      test('no-op when contactsDeclined is true', () async {
+        when(() => contactsService.hasPermission())
+            .thenAnswer((_) async => true);
+
+        final declinedContainer = ProviderContainer(overrides: [
+          contactsServiceProvider.overrideWithValue(contactsService),
+          supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
+          currentUserIdProvider.overrideWithValue('current-user-id'),
+          contactsDeclinedProvider.overrideWith((ref) => true),
+        ]);
+        final declinedNotifier =
+            declinedContainer.read(searchProvider.notifier);
+
+        await declinedNotifier.refreshContacts();
+
+        verifyNever(() => contactsService.refreshBatchCheck());
+        declinedContainer.dispose();
+      });
+
+      test('no-op when permission is not granted', () async {
+        // Default setUp has hasPermission = false; permission state in the
+        // notifier reflects that (hasContactsPermission = false in state).
+        await notifier.refreshContacts();
+
+        verifyNever(() => contactsService.refreshBatchCheck());
+      });
+
+      test('second refreshContacts while one is in flight skips the duplicate',
+          () async {
+        when(() => contactsService.hasPermission())
+            .thenAnswer((_) async => true);
+        when(() => contactsService.cachedContacts).thenReturn([]);
+        when(() => contactsService.cachedRogerUsers).thenReturn([]);
+
+        // Prime — permission known to notifier
+        when(() => contactsService.refreshBatchCheck())
+            .thenAnswer((_) async {});
+        await notifier.loadInitialContacts();
+        clearInteractions(contactsService);
+
+        // Now stub refreshBatchCheck with a controllable completer so the
+        // in-flight window is observable.
+        final completer = Completer<void>();
+        when(() => contactsService.refreshBatchCheck())
+            .thenAnswer((_) => completer.future);
+
+        final first = notifier.refreshContacts();
+        final second = notifier.refreshContacts();
+
+        // Only one underlying refresh fired
+        verify(() => contactsService.refreshBatchCheck()).called(1);
+
+        completer.complete();
+        await first;
+        await second;
+
+        // Still just one — the second was guarded (no additional calls fired
+        // beyond the one already verified above)
+        verifyNever(() => contactsService.refreshBatchCheck());
+      });
     });
   });
 }

@@ -12,8 +12,11 @@ const oliveLight = Color(0xFFE8E600);
 const errorColor = Color(0xB3FAFAF5);
 
 // Spec section 4 — Avatar color system
-// 9 colors: (background, foreground)
-// Verify visually on emulator — hex values may need tuning.
+// 8 colors: (background, foreground)
+// 'Charcoal' is intentionally absent — its background matched the app bg
+// (#1E1D18), making the avatar circle invisible against the screen. Any
+// existing rows with avatar_color = 'Charcoal' fall back to (charcoal2,
+// warmWhite) via the `??` in render sites — visible but neutral.
 const avatarColorMap = <String, (Color, Color)>{
   'Deep Red': (Color(0xFF2E0A0A), Color(0xFFFF8A80)),
   'Rust': (Color(0xFF7A3B2E), Color(0xFFFFB8A0)),
@@ -23,5 +26,4 @@ const avatarColorMap = <String, (Color, Color)>{
   'Rose': (Color(0xFFFF5E7A), Color(0xFFFFE8EE)),
   'Olive': (Color(0xFF595900), Color(0xFFE8E600)),
   'Cornflower': (Color(0xFF6395EE), Color(0xFFEDD4FA)),
-  'Charcoal': (Color(0xFF1E1D18), Color(0xFFFAFAF5)),
 };

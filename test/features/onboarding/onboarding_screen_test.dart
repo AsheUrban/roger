@@ -4,11 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:roger/core/models/user.dart';
 import 'package:roger/core/providers.dart';
 import 'package:roger/core/services/auth_service.dart';
 import 'package:roger/core/services/contacts_service.dart';
-import 'package:roger/features/onboarding/onboarding_notifier.dart';
 import 'package:roger/features/onboarding/onboarding_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 

@@ -188,46 +188,53 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     )
                   : state.results.isEmpty
                       ? _EmptyState(query: state.query)
-                      : ListView.separated(
-                          itemCount: state.results.length,
-                          separatorBuilder: (_, __) => Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 20),
-                            child: Divider(
-                              height: 0.5,
-                              thickness: 0.5,
-                              color: t.listDividerColor,
+                      : RefreshIndicator(
+                          color: warmWhite,
+                          backgroundColor: charcoal2,
+                          onRefresh: () =>
+                              ref.read(searchProvider.notifier).refreshContacts(),
+                          child: ListView.separated(
+                            key: const Key('search-results-list'),
+                            itemCount: state.results.length,
+                            separatorBuilder: (_, _) => Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 20),
+                              child: Divider(
+                                height: 0.5,
+                                thickness: 0.5,
+                                color: t.listDividerColor,
+                              ),
                             ),
+                            itemBuilder: (context, index) {
+                              final result = state.results[index];
+                              return _SearchResultRow(
+                                result: result,
+                                isGroupMode: state.isGroupMode,
+                                isSelected: result.rogerUser != null &&
+                                    state.selectedUserIds
+                                        .contains(result.rogerUser!.id),
+                                onChat: () async {
+                                  final convId = await notifier
+                                      .startChat(result.rogerUser!.id);
+                                  if (context.mounted) {
+                                    context.go('/camera/$convId');
+                                  }
+                                },
+                                onInvite: () {
+                                  notifier.sendInvite(result.phoneNumber);
+                                },
+                                onToggleSelect: result.rogerUser != null
+                                    ? () => notifier.toggleContactSelection(
+                                        result.rogerUser!.id)
+                                    : null,
+                                onLongPress: result.rogerUser != null &&
+                                        !state.isGroupMode
+                                    ? () => notifier.enterGroupModeWithContact(
+                                        result.rogerUser!.id)
+                                    : null,
+                              );
+                            },
                           ),
-                          itemBuilder: (context, index) {
-                            final result = state.results[index];
-                            return _SearchResultRow(
-                              result: result,
-                              isGroupMode: state.isGroupMode,
-                              isSelected: result.rogerUser != null &&
-                                  state.selectedUserIds
-                                      .contains(result.rogerUser!.id),
-                              onChat: () async {
-                                final convId = await notifier
-                                    .startChat(result.rogerUser!.id);
-                                if (context.mounted) {
-                                  context.go('/camera/$convId');
-                                }
-                              },
-                              onInvite: () {
-                                notifier.sendInvite(result.phoneNumber);
-                              },
-                              onToggleSelect: result.rogerUser != null
-                                  ? () => notifier.toggleContactSelection(
-                                      result.rogerUser!.id)
-                                  : null,
-                              onLongPress: result.rogerUser != null &&
-                                      !state.isGroupMode
-                                  ? () => notifier.enterGroupModeWithContact(
-                                      result.rogerUser!.id)
-                                  : null,
-                            );
-                          },
                         ),
             ),
 

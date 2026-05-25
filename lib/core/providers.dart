@@ -6,10 +6,25 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'database/app_database.dart';
 import 'services/auth_service.dart';
 import 'services/contacts_service.dart';
+import 'services/conversation_service.dart';
 import 'services/database_key_service.dart';
+import 'services/invite_service.dart';
 
-final authServiceProvider = Provider<AuthService>((ref) => AuthService());
-final contactsServiceProvider = Provider<ContactsService>((ref) => ContactsService());
+final authServiceProvider = Provider<AuthService>(
+  (ref) => AuthService(client: ref.read(supabaseClientProvider)),
+);
+final contactsServiceProvider = Provider<ContactsService>(
+  (ref) => ContactsService(client: ref.read(supabaseClientProvider)),
+);
+final conversationServiceProvider = Provider<ConversationService>(
+  (ref) => ConversationService(client: ref.read(supabaseClientProvider)),
+);
+final inviteServiceProvider = Provider<InviteService>(
+  (ref) => InviteService(
+    conversations: ref.read(conversationServiceProvider),
+    client: ref.read(supabaseClientProvider),
+  ),
+);
 final randomProvider = Provider<Random>((ref) => Random());
 
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {

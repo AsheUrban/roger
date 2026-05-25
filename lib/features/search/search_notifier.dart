@@ -1,11 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../../core/models/user.dart';
 import '../../core/providers.dart';
 import '../../core/services/contacts_service.dart';
+import '../../core/services/conversation_service.dart';
+import '../../core/services/invite_service.dart';
 import 'search_state.dart';
 
 final searchProvider =
@@ -13,14 +14,17 @@ final searchProvider =
 
 class SearchNotifier extends Notifier<SearchState> {
   late final ContactsService _contactsService;
-  late final SupabaseClient _client;
+  late final ConversationService _conversationService;
+  late final InviteService _inviteService;
   late final String? _currentUserId;
   Timer? _debounceTimer;
+  bool _refreshInFlight = false;
 
   @override
   SearchState build() {
     _contactsService = ref.read(contactsServiceProvider);
-    _client = ref.read(supabaseClientProvider);
+    _conversationService = ref.read(conversationServiceProvider);
+    _inviteService = ref.read(inviteServiceProvider);
     _currentUserId = ref.read(currentUserIdProvider);
 
     ref.onDispose(() {
@@ -64,6 +68,23 @@ class SearchNotifier extends Notifier<SearchState> {
     }
   }
 
+  /// Triggered on app foreground and by pull-to-refresh on Search.
+  /// Re-runs the hashed batch check and updates results. No-op if the user
+  /// declined contacts during onboarding, has not granted OS permission, or
+  /// a refresh is already in flight.
+  Future<void> refreshContacts() async {
+    if (_refreshInFlight) return;
+    if (ref.read(contactsDeclinedProvider)) return;
+    if (!state.hasContactsPermission) return;
+    _refreshInFlight = true;
+    try {
+      await _contactsService.refreshBatchCheck();
+      state = state.copyWith(results: _buildResults(filter: state.query));
+    } finally {
+      _refreshInFlight = false;
+    }
+  }
+
   Future<void> requestContactsPermission() async {
     final granted = await _contactsService.requestPermission();
     if (granted) {
@@ -100,121 +121,35 @@ class SearchNotifier extends Notifier<SearchState> {
     });
   }
 
-  /// Check if a 1:1 conversation already exists with this user.
-  /// If yes, return its ID. If no, create one. Never create duplicates.
-  Future<String> startChat(String userId) async {
-    final currentUserId = _currentUserId!;
-
-    // Find existing 1:1 conversation
-    final myMemberships = await _client
-        .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', currentUserId)
-        .isFilter('left_at', null);
-
-    final theirMemberships = await _client
-        .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', userId)
-        .isFilter('left_at', null);
-
-    final myConvIds =
-        (myMemberships as List).map((r) => r['conversation_id']).toSet();
-    final theirConvIds =
-        (theirMemberships as List).map((r) => r['conversation_id']).toSet();
-    final shared = myConvIds.intersection(theirConvIds);
-
-    if (shared.isNotEmpty) {
-      return shared.first as String;
-    }
-
-    // Create new conversation
-    final conv = await _client
-        .from('conversations')
-        .insert({'created_at': DateTime.now().toUtc().toIso8601String()})
-        .select('id')
-        .single();
-
-    final convId = conv['id'] as String;
-    final now = DateTime.now().toUtc().toIso8601String();
-
-    await _client.from('conversation_members').insert([
-      {
-        'conversation_id': convId,
-        'user_id': currentUserId,
-        'joined_at': now,
-      },
-      {
-        'conversation_id': convId,
-        'user_id': userId,
-        'joined_at': now,
-      },
-    ]);
-
-    return convId;
+  /// Open the existing 1:1 with this user, or create one if none exists.
+  Future<String> startChat(String userId) {
+    return _conversationService.findOrCreate1to1(
+      currentUserId: _currentUserId!,
+      otherUserId: userId,
+    );
   }
 
-  /// Create pending conversation + invite row for a non-roger contact.
-  // TODO: SMS invite via deep link (step 5 full implementation)
+  /// Create the pending conversation + invite for a non-roger contact, and
+  /// reflect the pending state in the search results.
   Future<void> sendInvite(String phoneNumber) async {
-    final currentUserId = _currentUserId!;
-    final now = DateTime.now().toUtc();
-
     try {
-      // Create conversation
-      final conv = await _client
-          .from('conversations')
-          .insert({'created_at': now.toIso8601String()})
-          .select('id')
-          .single();
-
-      final convId = conv['id'] as String;
-
-      // Add current user as member
-      await _client.from('conversation_members').insert({
-        'conversation_id': convId,
-        'user_id': currentUserId,
-        'joined_at': now.toIso8601String(),
-      });
-
-      // Create a placeholder message for the invite
-      final msg = await _client
-          .from('messages')
-          .insert({
-            'conversation_id': convId,
-            'sender_id': currentUserId,
-            'type': 'note',
-            'encrypted_text': '', // placeholder
-            'created_at': now.toIso8601String(),
-          })
-          .select('id')
-          .single();
-
-      // Create pending invite with 7-day expiry
-      await _client.from('pending_invites').insert({
-        'phone_number': phoneNumber,
-        'inviting_user_id': currentUserId,
-        'conversation_id': convId,
-        'message_id': msg['id'] as String,
-        'expires_at': now.add(const Duration(days: 7)).toIso8601String(),
-        'created_at': now.toIso8601String(),
-      });
-
-      // Update local state to show pending
-      final updatedResults = state.results.map((r) {
-        if (r.phoneNumber == phoneNumber) {
-          return SearchResult(
-            rogerUser: r.rogerUser,
-            contactName: r.contactName,
-            phoneNumber: r.phoneNumber,
-            isOnRoger: r.isOnRoger,
-            hasPendingInvite: true,
-          );
-        }
-        return r;
-      }).toList();
-
-      state = state.copyWith(results: updatedResults);
+      await _inviteService.sendInvite(
+        phoneNumber: phoneNumber,
+        currentUserId: _currentUserId!,
+      );
+      state = state.copyWith(
+        results: state.results
+            .map((r) => r.phoneNumber == phoneNumber
+                ? SearchResult(
+                    rogerUser: r.rogerUser,
+                    contactName: r.contactName,
+                    phoneNumber: r.phoneNumber,
+                    isOnRoger: r.isOnRoger,
+                    hasPendingInvite: true,
+                  )
+                : r)
+            .toList(),
+      );
     } catch (e) {
       state = state.copyWith(error: () => e.toString());
     }
@@ -296,34 +231,10 @@ class SearchNotifier extends Notifier<SearchState> {
   /// Create a group conversation with the selected members.
   Future<String> createGroupConversation({String? name}) async {
     final currentUserId = _currentUserId!;
-    final now = DateTime.now().toUtc().toIso8601String();
-
-    final conv = await _client
-        .from('conversations')
-        .insert({
-          'name': name,
-          'created_at': now,
-        })
-        .select('id')
-        .single();
-
-    final convId = conv['id'] as String;
-
-    final members = [
-      {
-        'conversation_id': convId,
-        'user_id': currentUserId,
-        'joined_at': now,
-      },
-      ...state.selectedUserIds.map((uid) => {
-            'conversation_id': convId,
-            'user_id': uid,
-            'joined_at': now,
-          }),
-    ];
-
-    await _client.from('conversation_members').insert(members);
-
+    final convId = await _conversationService.createConversation(
+      name: name,
+      memberIds: [currentUserId, ...state.selectedUserIds],
+    );
     exitGroupMode();
     return convId;
   }
