@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../core/models/user.dart';
 
 class SearchResult {
@@ -14,6 +16,26 @@ class SearchResult {
     required this.isOnRoger,
     this.hasPendingInvite = false,
   });
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is SearchResult &&
+        other.rogerUser == rogerUser &&
+        other.contactName == contactName &&
+        other.phoneNumber == phoneNumber &&
+        other.isOnRoger == isOnRoger &&
+        other.hasPendingInvite == hasPendingInvite;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        rogerUser,
+        contactName,
+        phoneNumber,
+        isOnRoger,
+        hasPendingInvite,
+      );
 }
 
 class SearchState {
@@ -61,22 +83,22 @@ class SearchState {
     if (identical(this, other)) return true;
     return other is SearchState &&
         other.query == query &&
-        other.results == results &&
+        listEquals(other.results, results) &&
         other.hasContactsPermission == hasContactsPermission &&
         other.isLoading == isLoading &&
         other.error == error &&
         other.isGroupMode == isGroupMode &&
-        other.selectedUserIds == selectedUserIds;
+        listEquals(other.selectedUserIds, selectedUserIds);
   }
 
   @override
   int get hashCode => Object.hash(
         query,
-        results,
+        Object.hashAll(results),
         hasContactsPermission,
         isLoading,
         error,
         isGroupMode,
-        selectedUserIds,
+        Object.hashAll(selectedUserIds),
       );
 }

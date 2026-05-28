@@ -14,4 +14,26 @@ class User {
     this.lastActiveAt,
     required this.createdAt,
   });
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is User &&
+        other.id == id &&
+        other.phoneNumber == phoneNumber &&
+        other.avatarColor == avatarColor &&
+        other.recoveryEmail == recoveryEmail &&
+        other.lastActiveAt == lastActiveAt &&
+        other.createdAt == createdAt;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        id,
+        phoneNumber,
+        avatarColor,
+        recoveryEmail,
+        lastActiveAt,
+        createdAt,
+      );
 }

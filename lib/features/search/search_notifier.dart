@@ -56,12 +56,14 @@ class SearchNotifier extends Notifier<SearchState> {
 
     try {
       await _contactsService.refreshBatchCheck();
+      if (!ref.mounted) return;
       state = state.copyWith(
         hasContactsPermission: true,
         results: _buildResults(),
         isLoading: false,
       );
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: () => e.toString(),
@@ -80,6 +82,7 @@ class SearchNotifier extends Notifier<SearchState> {
     _refreshInFlight = true;
     try {
       await _contactsService.refreshBatchCheck();
+      if (!ref.mounted) return;
       state = state.copyWith(results: _buildResults(filter: state.query));
     } finally {
       _refreshInFlight = false;
@@ -112,6 +115,7 @@ class SearchNotifier extends Notifier<SearchState> {
     _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
       try {
         final serverResult = await _contactsService.onDemandSearch(query);
+        if (!ref.mounted) return;
         if (serverResult != null) {
           // Re-filter with updated data
           state = state.copyWith(results: _buildResults(filter: query));

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../core/models/conversation.dart';
 import '../../core/models/user.dart';
 
@@ -53,8 +55,8 @@ class ConversationSummary {
     return other is ConversationSummary &&
         other.conversation == conversation &&
         other.displayName == displayName &&
-        other.members == members &&
-        other.memberContactNames == memberContactNames &&
+        listEquals(other.members, members) &&
+        listEquals(other.memberContactNames, memberContactNames) &&
         other.lastMessageAt == lastMessageAt &&
         other.hasUnread == hasUnread &&
         other.isOtherUserActive == isOtherUserActive &&
@@ -65,8 +67,8 @@ class ConversationSummary {
   int get hashCode => Object.hash(
         conversation,
         displayName,
-        members,
-        memberContactNames,
+        Object.hashAll(members),
+        Object.hashAll(memberContactNames),
         lastMessageAt,
         hasUnread,
         isOtherUserActive,
@@ -101,11 +103,15 @@ class ConversationsState {
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     return other is ConversationsState &&
-        other.conversations == conversations &&
+        listEquals(other.conversations, conversations) &&
         other.isLoading == isLoading &&
         other.error == error;
   }
 
   @override
-  int get hashCode => Object.hash(conversations, isLoading, error);
+  int get hashCode => Object.hash(
+        Object.hashAll(conversations),
+        isLoading,
+        error,
+      );
 }

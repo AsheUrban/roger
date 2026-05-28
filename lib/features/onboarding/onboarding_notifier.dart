@@ -56,12 +56,14 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
 
     try {
       await _authService.sendOtp(trimmed);
+      if (!ref.mounted) return;
       state = state.copyWith(
         phoneNumber: trimmed,
         step: OnboardingStep.otpVerification,
         isLoading: false,
       );
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: () => e.toString(),
@@ -77,8 +79,10 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
 
     try {
       await _authService.sendOtp(state.phoneNumber);
+      if (!ref.mounted) return;
       state = state.copyWith(isLoading: false);
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: () => e.toString(),
@@ -105,9 +109,11 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         phoneNumber: state.phoneNumber,
         otpCode: trimmed,
       );
+      if (!ref.mounted) return;
 
       // Check if this phone number already has an account
       final existingUser = await _authService.getCurrentUser();
+      if (!ref.mounted) return;
 
       if (existingUser != null) {
         // Existing user — skip onboarding
@@ -125,6 +131,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         );
       }
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: () => 'Invalid or expired code. Please try again.',
@@ -134,6 +141,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
 
   Future<void> requestContactsPermission() async {
     final granted = await _contactsService.requestPermission();
+    if (!ref.mounted) return;
 
     if (granted) {
       // Fire and forget — hashed batch check runs in background,
@@ -160,12 +168,13 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         phoneNumber: state.phoneNumber,
         avatarColor: state.avatarColor,
       );
-
+      if (!ref.mounted) return;
       state = state.copyWith(
         isLoading: false,
         onboardingComplete: true,
       );
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(
         isLoading: false,
         error: () => e.toString(),
