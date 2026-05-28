@@ -17,16 +17,6 @@ class MockSupabaseClient extends Mock implements SupabaseClient {}
 AppDatabase _makeInMemoryDatabase() =>
     AppDatabase(NativeDatabase.memory());
 
-// Fake notifier — overrides build() to return a preset state, skipping
-// all Supabase setup. onNewMessage() uses the real implementation.
-class _FakeConversationsNotifier extends ConversationsNotifier {
-  final ConversationsState _seed;
-  _FakeConversationsNotifier(this._seed);
-
-  @override
-  ConversationsState build() => _seed;
-}
-
 // ---- Test data ----
 
 final _conv1 = Conversation(id: 'conv-1', createdAt: DateTime(2026, 1, 1));
@@ -70,12 +60,10 @@ void main() {
   tearDown(() async => appDatabase.close());
 
   ProviderContainer makeContainer({ConversationsState? seed}) {
-    return ProviderContainer(
+    return ProviderContainer.test(
       overrides: [
         if (seed != null)
-          conversationsProvider.overrideWith(
-            () => _FakeConversationsNotifier(seed),
-          ),
+          conversationsProvider.overrideWithBuild((ref, self) => seed),
         contactsServiceProvider.overrideWithValue(contactsService),
         supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
         currentUserIdProvider.overrideWithValue('current-user-id'),
@@ -88,8 +76,6 @@ void main() {
     group('initial state', () {
       test('starts with empty list, not loading, no error', () {
         final container = makeContainer();
-        addTearDown(container.dispose);
-
         final state = container.read(conversationsProvider);
         expect(state.conversations, isEmpty);
         expect(state.isLoading, false);
@@ -129,8 +115,6 @@ void main() {
           ],
         );
         final container = makeContainer(seed: seed);
-        addTearDown(container.dispose);
-
         container.read(conversationsProvider.notifier).onNewMessage(
           conversationId: 'conv-1',
           senderId: 'other-user',
@@ -152,8 +136,6 @@ void main() {
           ],
         );
         final container = makeContainer(seed: seed);
-        addTearDown(container.dispose);
-
         container.read(conversationsProvider.notifier).onNewMessage(
           conversationId: 'conv-1',
           senderId: 'current-user-id',
@@ -173,8 +155,6 @@ void main() {
           ],
         );
         final container = makeContainer(seed: seed);
-        addTearDown(container.dispose);
-
         container.read(conversationsProvider.notifier).onNewMessage(
           conversationId: 'conv-1',
           senderId: 'other-user',
@@ -198,8 +178,6 @@ void main() {
           ],
         );
         final container = makeContainer(seed: seed);
-        addTearDown(container.dispose);
-
         // New message for conv1 makes it the most recent
         container.read(conversationsProvider.notifier).onNewMessage(
           conversationId: 'conv-1',
@@ -229,8 +207,6 @@ void main() {
           ],
         );
         final container = makeContainer(seed: seed);
-        addTearDown(container.dispose);
-
         container.read(conversationsProvider.notifier).onNewMessage(
           conversationId: 'conv-1',
           senderId: 'other-user',

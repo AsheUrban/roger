@@ -145,7 +145,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
   }
 
   Future<void> skipContactsPermission() async {
-    ref.read(contactsDeclinedProvider.notifier).state = true;
+    ref.read(contactsDeclinedProvider.notifier).setDeclined(true);
     await completeOnboarding();
   }
 

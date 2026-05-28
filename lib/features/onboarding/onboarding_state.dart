@@ -38,4 +38,26 @@ class OnboardingState {
       onboardingComplete: onboardingComplete ?? this.onboardingComplete,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is OnboardingState &&
+        other.step == step &&
+        other.phoneNumber == phoneNumber &&
+        other.avatarColor == avatarColor &&
+        other.isLoading == isLoading &&
+        other.error == error &&
+        other.onboardingComplete == onboardingComplete;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        step,
+        phoneNumber,
+        avatarColor,
+        isLoading,
+        error,
+        onboardingComplete,
+      );
 }

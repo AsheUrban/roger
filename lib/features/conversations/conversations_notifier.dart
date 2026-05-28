@@ -36,6 +36,7 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
 
   Future<void> _initAsync() async {
     await loadConversations();
+    if (!ref.mounted) return;
     _setupRealtime();
   }
 
@@ -199,8 +200,10 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
       }
 
       _sortByMostRecent(summaries);
+      if (!ref.mounted) return;
       state = state.copyWith(conversations: summaries, isLoading: false);
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(isLoading: false, error: () => e.toString());
     }
   }

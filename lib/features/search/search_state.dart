@@ -55,4 +55,28 @@ class SearchState {
       selectedUserIds: selectedUserIds ?? this.selectedUserIds,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is SearchState &&
+        other.query == query &&
+        other.results == results &&
+        other.hasContactsPermission == hasContactsPermission &&
+        other.isLoading == isLoading &&
+        other.error == error &&
+        other.isGroupMode == isGroupMode &&
+        other.selectedUserIds == selectedUserIds;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        query,
+        results,
+        hasContactsPermission,
+        isLoading,
+        error,
+        isGroupMode,
+        selectedUserIds,
+      );
 }

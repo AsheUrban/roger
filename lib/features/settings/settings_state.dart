@@ -13,4 +13,17 @@ class SettingsState {
     this.isLoading = false,
     this.error,
   });
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is SettingsState &&
+        other.user == user &&
+        other.settings == settings &&
+        other.isLoading == isLoading &&
+        other.error == error;
+  }
+
+  @override
+  int get hashCode => Object.hash(user, settings, isLoading, error);
 }

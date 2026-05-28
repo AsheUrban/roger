@@ -44,7 +44,7 @@ void main() {
     when(() => contactsService.cachedContacts).thenReturn([]);
     when(() => contactsService.cachedRogerUsers).thenReturn([]);
 
-    container = ProviderContainer(overrides: [
+    container = ProviderContainer.test(overrides: [
       contactsServiceProvider.overrideWithValue(contactsService),
       conversationServiceProvider.overrideWithValue(conversationService),
       supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
@@ -52,10 +52,6 @@ void main() {
     ]);
 
     notifier = container.read(searchProvider.notifier);
-  });
-
-  tearDown(() {
-    container.dispose();
   });
 
   group('SearchNotifier', () {
@@ -78,11 +74,11 @@ void main() {
             .thenAnswer((_) async => true);
 
         // But user tapped "Not now" during onboarding
-        final declinedContainer = ProviderContainer(overrides: [
+        final declinedContainer = ProviderContainer.test(overrides: [
           contactsServiceProvider.overrideWithValue(contactsService),
           supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
           currentUserIdProvider.overrideWithValue('current-user-id'),
-          contactsDeclinedProvider.overrideWith((ref) => true),
+          contactsDeclinedProvider.overrideWithBuild((ref, self) => true),
         ]);
 
         // Let _initAsync run
@@ -92,8 +88,6 @@ void main() {
         expect(state.results, isEmpty);
         expect(state.hasContactsPermission, false);
         verifyNever(() => contactsService.refreshBatchCheck());
-
-        declinedContainer.dispose();
       });
 
       test('granting permission via search bar overrides declined flag',
@@ -108,11 +102,11 @@ void main() {
         when(() => contactsService.cachedRogerUsers)
             .thenReturn([_testUser1]);
 
-        final declinedContainer = ProviderContainer(overrides: [
+        final declinedContainer = ProviderContainer.test(overrides: [
           contactsServiceProvider.overrideWithValue(contactsService),
           supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
           currentUserIdProvider.overrideWithValue('current-user-id'),
-          contactsDeclinedProvider.overrideWith((ref) => true),
+          contactsDeclinedProvider.overrideWithBuild((ref, self) => true),
         ]);
 
         final declinedNotifier = declinedContainer.read(searchProvider.notifier);
@@ -124,8 +118,6 @@ void main() {
         expect(state.hasContactsPermission, true);
         // Declined flag should be cleared
         expect(declinedContainer.read(contactsDeclinedProvider), false);
-
-        declinedContainer.dispose();
       });
     });
 
@@ -550,11 +542,11 @@ void main() {
         when(() => contactsService.hasPermission())
             .thenAnswer((_) async => true);
 
-        final declinedContainer = ProviderContainer(overrides: [
+        final declinedContainer = ProviderContainer.test(overrides: [
           contactsServiceProvider.overrideWithValue(contactsService),
           supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
           currentUserIdProvider.overrideWithValue('current-user-id'),
-          contactsDeclinedProvider.overrideWith((ref) => true),
+          contactsDeclinedProvider.overrideWithBuild((ref, self) => true),
         ]);
         final declinedNotifier =
             declinedContainer.read(searchProvider.notifier);
@@ -562,7 +554,6 @@ void main() {
         await declinedNotifier.refreshContacts();
 
         verifyNever(() => contactsService.refreshBatchCheck());
-        declinedContainer.dispose();
       });
 
       test('no-op when permission is not granted', () async {

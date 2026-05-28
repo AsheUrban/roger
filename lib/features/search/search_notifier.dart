@@ -44,6 +44,7 @@ class SearchNotifier extends Notifier<SearchState> {
     if (declined) return;
 
     final granted = await _contactsService.hasPermission();
+    if (!ref.mounted) return;
     if (granted) {
       state = state.copyWith(hasContactsPermission: true);
       loadInitialContacts();
@@ -89,7 +90,7 @@ class SearchNotifier extends Notifier<SearchState> {
     final granted = await _contactsService.requestPermission();
     if (granted) {
       // Clear the declined flag — user has now explicitly granted permission
-      ref.read(contactsDeclinedProvider.notifier).state = false;
+      ref.read(contactsDeclinedProvider.notifier).setDeclined(false);
       state = state.copyWith(hasContactsPermission: true);
       await loadInitialContacts();
     }

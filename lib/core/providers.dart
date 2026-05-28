@@ -38,7 +38,17 @@ final currentUserIdProvider = Provider<String?>((ref) {
 /// Tracks whether the user explicitly skipped contacts permission during onboarding.
 /// SearchNotifier checks this before auto-loading contacts.
 /// Cleared when the user later grants permission via the search bar.
-final contactsDeclinedProvider = StateProvider<bool>((ref) => false);
+class ContactsDeclinedNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void setDeclined(bool value) => state = value;
+}
+
+final contactsDeclinedProvider =
+    NotifierProvider<ContactsDeclinedNotifier, bool>(
+  ContactsDeclinedNotifier.new,
+);
 
 /// Initialized in main() via ProviderScope override after the DB key is ready.
 /// Throws if accessed before initialization — this is intentional.

@@ -29,17 +29,13 @@ void main() {
     // Default: random returns index 2 → 'Deep Ember'
     when(() => random.nextInt(any())).thenReturn(2);
 
-    container = ProviderContainer(overrides: [
+    container = ProviderContainer.test(overrides: [
       authServiceProvider.overrideWithValue(authService),
       contactsServiceProvider.overrideWithValue(contactsService),
       randomProvider.overrideWithValue(random),
     ]);
 
     notifier = container.read(onboardingProvider.notifier);
-  });
-
-  tearDown(() {
-    container.dispose();
   });
 
   /// Helper: advance notifier to a given step with valid state
@@ -282,7 +278,7 @@ void main() {
 
       test('abandoning mid-flow and relaunching restarts from beginning', () {
         // A fresh container always starts at phoneEntry
-        final freshContainer = ProviderContainer(overrides: [
+        final freshContainer = ProviderContainer.test(overrides: [
           authServiceProvider.overrideWithValue(authService),
           contactsServiceProvider.overrideWithValue(contactsService),
           randomProvider.overrideWithValue(random),
@@ -291,7 +287,6 @@ void main() {
             freshContainer.read(onboardingProvider.notifier);
         expect(freshNotifier.state.step, OnboardingStep.phoneEntry);
         expect(freshNotifier.state.phoneNumber, '');
-        freshContainer.dispose();
       });
 
       test(

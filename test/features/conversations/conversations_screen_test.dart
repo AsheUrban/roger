@@ -9,14 +9,6 @@ import 'package:roger/features/conversations/conversations_notifier.dart';
 import 'package:roger/features/conversations/conversations_screen.dart';
 import 'package:roger/features/conversations/conversations_state.dart';
 
-class _FakeConversationsNotifier extends ConversationsNotifier {
-  final ConversationsState _seed;
-  _FakeConversationsNotifier(this._seed);
-
-  @override
-  ConversationsState build() => _seed;
-}
-
 // ---- Test data ----
 
 final _activeUser = User(
@@ -63,9 +55,7 @@ ConversationSummary _makeSummary({
 Widget _buildWithFakeState({required ConversationsState state}) {
   return ProviderScope(
     overrides: [
-      conversationsProvider.overrideWith(
-        () => _FakeConversationsNotifier(state),
-      ),
+      conversationsProvider.overrideWithBuild((ref, self) => state),
     ],
     child: const MaterialApp(
       home: ConversationsScreen(),
@@ -93,9 +83,7 @@ Widget _buildWithRouter({required ConversationsState state}) {
 
   return ProviderScope(
     overrides: [
-      conversationsProvider.overrideWith(
-        () => _FakeConversationsNotifier(state),
-      ),
+      conversationsProvider.overrideWithBuild((ref, self) => state),
     ],
     child: MaterialApp.router(routerConfig: router),
   );

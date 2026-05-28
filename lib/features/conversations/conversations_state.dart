@@ -46,6 +46,32 @@ class ConversationSummary {
           : this.otherUserLastActiveAt,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is ConversationSummary &&
+        other.conversation == conversation &&
+        other.displayName == displayName &&
+        other.members == members &&
+        other.memberContactNames == memberContactNames &&
+        other.lastMessageAt == lastMessageAt &&
+        other.hasUnread == hasUnread &&
+        other.isOtherUserActive == isOtherUserActive &&
+        other.otherUserLastActiveAt == otherUserLastActiveAt;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        conversation,
+        displayName,
+        members,
+        memberContactNames,
+        lastMessageAt,
+        hasUnread,
+        isOtherUserActive,
+        otherUserLastActiveAt,
+      );
 }
 
 class ConversationsState {
@@ -70,4 +96,16 @@ class ConversationsState {
       error: error != null ? error() : this.error,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is ConversationsState &&
+        other.conversations == conversations &&
+        other.isLoading == isLoading &&
+        other.error == error;
+  }
+
+  @override
+  int get hashCode => Object.hash(conversations, isLoading, error);
 }
