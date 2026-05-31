@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:roger/core/models/user.dart';
 import 'package:roger/core/providers.dart';
 import 'package:roger/core/services/auth_service.dart';
 import 'package:roger/core/services/contacts_service.dart';
@@ -142,6 +143,15 @@ void main() {
             ));
         when(() => authService.getCurrentUser())
             .thenAnswer((_) async => null);
+        when(() => authService.createAccount(
+              phoneNumber: any(named: 'phoneNumber'),
+              avatarColor: any(named: 'avatarColor'),
+            )).thenAnswer((_) async => User(
+              id: 'new-id',
+              phoneNumber: '+15550001000',
+              avatarColor: 'Deep Ember',
+              createdAt: DateTime.now(),
+            ));
 
         await tester.enterText(find.byType(TextField), '123456');
         await tester.tap(find.text('Verify'));
@@ -182,6 +192,15 @@ void main() {
             ));
         when(() => authService.getCurrentUser())
             .thenAnswer((_) async => null);
+        when(() => authService.createAccount(
+              phoneNumber: any(named: 'phoneNumber'),
+              avatarColor: any(named: 'avatarColor'),
+            )).thenAnswer((_) async => User(
+              id: 'new-id',
+              phoneNumber: '+15550001000',
+              avatarColor: 'Deep Ember',
+              createdAt: DateTime.now(),
+            ));
 
         await tester.pumpWidget(buildTestWidget());
 
