@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/auth_notifier.dart';
 import '../../core/providers.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/contacts_service.dart';
@@ -116,7 +117,10 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       if (!ref.mounted) return;
 
       if (existingUser != null) {
-        // Existing user — skip onboarding
+        // Existing user — skip onboarding. Flip cached auth state to
+        // Onboarded before the screen's `context.go('/search')` so the
+        // synchronous redirect sees the new state and doesn't bounce.
+        ref.read(authProvider.notifier).markOnboarded();
         state = state.copyWith(
           isLoading: false,
           onboardingComplete: true,
@@ -169,6 +173,10 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         avatarColor: state.avatarColor,
       );
       if (!ref.mounted) return;
+      // Flip cached auth state to Onboarded before the screen's
+      // `context.go('/search')` so the synchronous redirect sees the new
+      // state and doesn't bounce.
+      ref.read(authProvider.notifier).markOnboarded();
       state = state.copyWith(
         isLoading: false,
         onboardingComplete: true,

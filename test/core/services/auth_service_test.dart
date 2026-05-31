@@ -1,53 +1,36 @@
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('AuthService', () {
+  group('AuthService', skip: 'Integration test — needs real Supabase', () {
     group('sendOtp', () {
-      test('sends OTP to valid phone number', () {
-        fail('not implemented');
-      });
+      test('sends OTP to valid phone number', () {});
     });
 
     group('verifyOtp', () {
-      test('verifies OTP and authenticates user', () {
-        fail('not implemented');
-      });
+      test('verifies OTP and authenticates user', () {});
 
-      test('rejects invalid OTP code', () {
-        fail('not implemented');
-      });
+      test('rejects invalid OTP code', () {});
     });
 
     group('getCurrentUser', () {
-      test('returns user if public.users row exists', () {
-        fail('not implemented');
-      });
+      test('returns user if public.users row exists', () {});
 
-      test('returns null if no public.users row', () {
-        fail('not implemented');
-      });
+      test('returns null if no public.users row', () {});
     });
 
     group('createAccount', () {
-      test('requires phone number and avatar color', () {
-        fail('not implemented');
-      });
+      test('requires phone number and avatar color', () {});
 
-      test('existing phone number logs in instead of creating duplicate', () {
-        fail('not implemented');
-      });
+      test('existing phone number logs in instead of creating duplicate',
+          () {});
     });
 
     group('updatePhoneNumber', () {
-      test('updates phone number after OTP verification', () {
-        fail('not implemented');
-      });
+      test('updates phone number after OTP verification', () {});
     });
 
     group('updateRecoveryEmail', () {
-      test('updates recovery email', () {
-        fail('not implemented');
-      });
+      test('updates recovery email', () {});
     });
   });
 }

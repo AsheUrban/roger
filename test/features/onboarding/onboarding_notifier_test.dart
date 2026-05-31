@@ -28,6 +28,12 @@ void main() {
     random = MockRandom();
     // Default: random returns index 2 → 'Deep Ember'
     when(() => random.nextInt(any())).thenReturn(2);
+    // markOnboarded() (J) reads authProvider → builds AuthNotifier, which
+    // touches these. Stub them explicitly so these tests don't lean on
+    // mocktail's permissive default for an unstubbed Stream getter.
+    when(() => authService.currentSession).thenReturn(null);
+    when(() => authService.authEvents)
+        .thenAnswer((_) => Stream<AuthChangeEvent>.empty());
 
     container = ProviderContainer.test(overrides: [
       authServiceProvider.overrideWithValue(authService),

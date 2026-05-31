@@ -64,11 +64,15 @@ Video calls are end-to-end encrypted natively.
 | Database & Auth | Supabase |
 | Video/Photo Storage | Cloudflare R2 |
 | Live Video | LiveKit (WebRTC, E2EE native) |
+| On-Device Compression | `video_compress` |
 | Closed Captions | Picovoice Cheetah (on-device) |
-| Encryption | `cryptography` / `libsodium_dart` |
+| Push Notifications | FCM + APNs via Supabase |
+| Content Encryption | `cryptography` (AES-256 + ECDH) |
 | Key Storage | iCloud Keychain (iOS) · Android Keystore (Android) |
-| State Management | Riverpod |
-| Local Storage | drift (SQLite, SQLCipher-encrypted) |
+| State Management | Riverpod 3.x |
+| Navigation | `go_router` |
+| Local Storage | drift (SQLite, encrypted at rest via sqlite3mc) |
+| Deep Linking | Custom URL scheme → App Links / Universal Links |
 
 ---
 

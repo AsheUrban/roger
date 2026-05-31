@@ -8,6 +8,17 @@ class AuthService {
   AuthService({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
 
+  /// Synchronously available after `Supabase.initialize` — the stored session
+  /// (if any) is loaded from local storage during initialize. Used by
+  /// `AuthNotifier.build()` to seed `AuthState` before the first frame.
+  Session? get currentSession => _client.auth.currentSession;
+
+  /// Auth lifecycle events. `AuthNotifier` acts on `signedOut` only; the
+  /// `signedIn` / `tokenRefreshed` / `initialSession` events fire on startup
+  /// and reacting to them would clobber the seed / async correction.
+  Stream<AuthChangeEvent> get authEvents =>
+      _client.auth.onAuthStateChange.map((s) => s.event);
+
   Future<void> sendOtp(String phoneNumber) async {
     await _client.auth.signInWithOtp(phone: phoneNumber);
   }
