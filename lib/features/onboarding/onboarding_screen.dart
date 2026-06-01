@@ -222,7 +222,7 @@ class _ContactsPermissionStep extends ConsumerWidget {
         const SizedBox(height: 12),
         Text(
           'Allow contacts access to find friends on roger. '
-          'Rest assured, unecrypted numbers never leave your phone.',
+          'Rest assured, unencrypted numbers never leave your phone.',
           style: t.bodySubdued,
           textAlign: TextAlign.center,
         ),
