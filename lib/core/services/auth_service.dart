@@ -43,30 +43,16 @@ class AuthService {
       throw Exception('Not authenticated.');
     }
 
-    final now = DateTime.now().toUtc().toIso8601String();
+    // Atomic create — the create_account RPC (migration 00004) inserts the
+    // users and user_settings rows in a single transaction, so a failure can
+    // never leave a half-made account (orphaned users row with no settings).
+    // Returns the new users row; never needs a follow-up SELECT.
+    final row = await _client.rpc('create_account', params: {
+      'p_phone_number': phoneNumber,
+      'p_avatar_color': avatarColor,
+    });
 
-    final userRow = {
-      'id': authUser.id,
-      'phone_number': phoneNumber,
-      'avatar_color': avatarColor,
-      'created_at': now,
-    };
-
-    final settingsRow = {
-      'user_id': authUser.id,
-      'created_at': now,
-      'updated_at': now,
-    };
-
-    final insertedUser = await _client
-        .from('users')
-        .insert(userRow)
-        .select()
-        .single();
-
-    await _client.from('user_settings').insert(settingsRow);
-
-    return _userFromRow(insertedUser);
+    return _userFromRow(row as Map<String, dynamic>);
   }
 
   Future<app.User?> getCurrentUser() async {

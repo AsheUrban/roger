@@ -23,6 +23,13 @@ void main() {
 
       test('existing phone number logs in instead of creating duplicate',
           () {});
+
+      // Atomicity (Gap 1, LOG_5_31): createAccount calls the create_account
+      // RPC (migration 00004), which inserts the users and user_settings rows
+      // in one transaction. A failure must leave NEITHER row — never an
+      // orphaned users row with no settings.
+      test('atomic — a failed account creation leaves no users or settings row',
+          () {});
     });
 
     group('updatePhoneNumber', () {
