@@ -83,7 +83,7 @@ void main() {
     test('own users row exposes phone_hash, never phone_number', () async {
       final row = await a.from('users').select().eq('id', aId).single();
       expect(row.containsKey('phone_number'), isFalse,
-          reason: 'users.phone_number must be dropped by 00005');
+          reason: 'users.phone_number must not exist — never created by 00001_init');
       expect(row.containsKey('phone_hash'), isTrue,
           reason: 'users.phone_hash must exist and be populated');
     });
@@ -129,8 +129,9 @@ void main() {
       () async {
         // Needs a disposable authenticated user with no account, so the direct
         // insert is the only write path being exercised. Requires a third test
-        // number + per-run cleanup; lands with 00005 once the insert-own policy
-        // is dropped and create_account is the sole write path.
+        // number + per-run cleanup; fills in with the harness work. 00001_init
+        // already has no users:insert-own policy, so create_account is the sole
+        // write path.
       },
       skip: 'feature not built — needs a disposable test user (no account) to '
           'exercise the rejected direct insert. 00001_init already has no '

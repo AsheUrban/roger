@@ -240,8 +240,9 @@ as $$
   );
 $$;
 
--- Peppered SHA-256 of an already-normalized E.164 phone number. The pepper is
--- held in Vault (seeded out of band — see header) and never leaves the server.
+-- Peppered SHA-256 of a phone number, canonicalized to bare digits first. The
+-- pepper is held in Vault (seeded out of band — see header) and never leaves
+-- the server.
 -- Not granted to clients: only create_account and the discovery Edge Function
 -- (both server-side) call it. The single source of the hashing logic, so the
 -- on-join invite match (invited_phone_hash == joiner phone_hash) stays consistent.
@@ -258,6 +259,7 @@ set search_path = public, vault, extensions
 as $$
 declare
   v_pepper text;
+  v_norm text;
 begin
   select decrypted_secret into v_pepper
   from vault.decrypted_secrets
@@ -268,7 +270,14 @@ begin
     raise exception 'discovery_pepper is not configured in Vault';
   end if;
 
-  return encode(digest(v_pepper || p_phone, 'sha256'), 'hex');
+  -- Canonicalize to bare digits before hashing. Supabase Auth stores
+  -- auth.users.phone WITHOUT the leading '+', while client/discovery input
+  -- (and libphonenumber E.164 output) carries it. Stripping non-digits makes
+  -- both forms hash identically — the single normalization chokepoint shared
+  -- by create_account and discover_user, so the on-join invite match holds too.
+  v_norm := regexp_replace(p_phone, '[^0-9]', '', 'g');
+
+  return encode(digest(v_pepper || v_norm, 'sha256'), 'hex');
 end;
 $$;
 
@@ -347,6 +356,60 @@ begin
   values (v_caller, v_now, v_now);
 
   return v_caller;
+end;
+$$;
+
+-- Single-pick contact discovery. One number in → at most one match out
+-- (user_id + non-sensitive fields), or nothing. Rate-limited per caller per day
+-- so it can't be an enumeration oracle (Spec §18 invariant 5; cap 20/day).
+-- SECURITY DEFINER: reads users past the narrowed RLS and writes the RLS-denied
+-- discovery_rate_limit counter. The raw number is used transiently (hashed via
+-- peppered_phone_hash) and never stored.
+--
+-- OPERATIONAL NOTE: ensure Postgres statement logging does not capture this
+-- function's argument (the raw number). The function itself logs nothing.
+create or replace function public.discover_user(p_phone text)
+returns table (
+  user_id        uuid,
+  avatar_color   text,
+  last_active_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_caller uuid := auth.uid();
+  v_cap constant integer := 20; -- Spec §18; the message below interpolates it so they can't drift
+  v_count integer;
+  v_hash text;
+begin
+  if v_caller is null then
+    raise exception 'Not authenticated' using errcode = '42501';
+  end if;
+
+  -- Atomic per-day counter. EVERY call counts — a no-match probe still consumes
+  -- the allowance, which is what bounds enumeration.
+  insert into public.discovery_rate_limit (user_id, day, count)
+  values (v_caller, current_date, 1)
+  on conflict (user_id, day)
+    do update set count = public.discovery_rate_limit.count + 1
+  returning count into v_count;
+
+  if v_count > v_cap then
+    raise exception
+      'You''ve added or refreshed % contacts today, please try again tomorrow.',
+      v_cap;
+  end if;
+
+  v_hash := public.peppered_phone_hash(p_phone);
+
+  return query
+    select u.id, u.avatar_color, u.last_active_at
+    from public.users u
+    where u.phone_hash = v_hash
+    limit 1;
 end;
 $$;
 
@@ -648,3 +711,4 @@ alter table public.discovery_rate_limit enable row level security;
 -- ============================================================
 grant execute on function public.create_conversation(text, uuid[]) to authenticated;
 grant execute on function public.create_account(text) to authenticated;
+grant execute on function public.discover_user(text) to authenticated;
