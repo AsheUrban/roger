@@ -12,6 +12,7 @@ ConversationSummary _summary({
   bool hasUnread = false,
   bool isOtherUserActive = false,
   DateTime? otherUserLastActiveAt,
+  int deletedMemberCount = 0,
 }) {
   return ConversationSummary(
     conversation: Conversation(
@@ -25,6 +26,7 @@ ConversationSummary _summary({
     hasUnread: hasUnread,
     isOtherUserActive: isOtherUserActive,
     otherUserLastActiveAt: otherUserLastActiveAt,
+    deletedMemberCount: deletedMemberCount,
   );
 }
 
@@ -174,6 +176,19 @@ void main() {
       final a = _summary(otherUserLastActiveAt: null);
       final b = _summary(otherUserLastActiveAt: DateTime(2026, 4, 8));
       expect(a, isNot(equals(b)));
+    });
+
+    test('not equal when deletedMemberCount differs', () {
+      final a = _summary(deletedMemberCount: 0);
+      final b = _summary(deletedMemberCount: 1);
+      expect(a, isNot(equals(b)));
+    });
+
+    test('equal when deletedMemberCount matches', () {
+      final a = _summary(deletedMemberCount: 1);
+      final b = _summary(deletedMemberCount: 1);
+      expect(a, equals(b));
+      expect(a.hashCode, equals(b.hashCode));
     });
 
     test('copyWith with no changes produces an equal instance', () {

@@ -193,6 +193,7 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
           hasUnread: hasUnread,
           isOtherUserActive: isOtherUserActive,
           otherUserLastActiveAt: otherUserLastActiveAt,
+          deletedMemberCount: deletedNames.length,
         ));
       }
 

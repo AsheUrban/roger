@@ -31,10 +31,12 @@ ConversationSummary _makeSummary({
   String id = 'conv-1',
   String displayName = 'Alex',
   List<User>? members,
+  List<String>? memberContactNames,
   DateTime? lastMessageAt,
   bool hasUnread = false,
   bool isOtherUserActive = false,
   DateTime? otherUserLastActiveAt,
+  int deletedMemberCount = 0,
 }) {
   return ConversationSummary(
     conversation: Conversation(
@@ -43,10 +45,12 @@ ConversationSummary _makeSummary({
     ),
     displayName: displayName,
     members: members ?? [_inactiveUser],
+    memberContactNames: memberContactNames ?? const [],
     lastMessageAt: lastMessageAt ?? DateTime(2026, 4, 8, 10, 0),
     hasUnread: hasUnread,
     isOtherUserActive: isOtherUserActive,
     otherUserLastActiveAt: otherUserLastActiveAt,
+    deletedMemberCount: deletedMemberCount,
   );
 }
 
@@ -256,6 +260,94 @@ void main() {
               (widget.decoration as BoxDecoration).shape == BoxShape.circle,
         );
         expect(presenceDot, findsNothing);
+      });
+    });
+
+    group('deleted user', () {
+      // Finder for a warm-white circle avatar (spec §4 deleted-user treatment).
+      final warmWhiteCircle = find.byWidgetPredicate(
+        (w) =>
+            w is Container &&
+            w.decoration is BoxDecoration &&
+            (w.decoration as BoxDecoration).color == warmWhite &&
+            (w.decoration as BoxDecoration).shape == BoxShape.circle,
+      );
+      final oliveCircle = find.byWidgetPredicate(
+        (w) =>
+            w is Container &&
+            w.decoration is BoxDecoration &&
+            (w.decoration as BoxDecoration).color == oliveLight &&
+            (w.decoration as BoxDecoration).shape == BoxShape.circle,
+      );
+
+      testWidgets(
+          '1:1 with a deleted other party shows the warm-white circle + '
+          'charcoal dash avatar and the name "Deleted user"', (tester) async {
+        await tester.pumpWidget(_buildWithFakeState(
+          state: ConversationsState(
+            conversations: [
+              _makeSummary(
+                displayName: 'Deleted user',
+                members: const [],
+                deletedMemberCount: 1,
+                isOtherUserActive: false,
+              ),
+            ],
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Deleted user'), findsOneWidget);
+        // The charcoal dash inside the avatar.
+        expect(find.byIcon(Icons.remove), findsOneWidget);
+        // A warm-white circle avatar (no unread dot in this summary).
+        expect(warmWhiteCircle, findsOneWidget);
+        // Never the generic "?" fallback.
+        expect(find.text('?'), findsNothing);
+      });
+
+      testWidgets('1:1 deleted other party never shows a presence dot',
+          (tester) async {
+        await tester.pumpWidget(_buildWithFakeState(
+          state: ConversationsState(
+            conversations: [
+              _makeSummary(
+                displayName: 'Deleted user',
+                members: const [],
+                deletedMemberCount: 1,
+                isOtherUserActive: false,
+              ),
+            ],
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(oliveCircle, findsNothing);
+      });
+
+      testWidgets(
+          'group with one deleted member shows the deleted treatment for that '
+          'slot, renders active members normally, and does not crash',
+          (tester) async {
+        await tester.pumpWidget(_buildWithFakeState(
+          state: ConversationsState(
+            conversations: [
+              _makeSummary(
+                displayName: 'Alex, Deleted user',
+                members: [_activeUser],
+                memberContactNames: const ['Alex'],
+                deletedMemberCount: 1,
+              ),
+            ],
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        // The deleted member's slot renders the dash.
+        expect(find.byIcon(Icons.remove), findsOneWidget);
+        // The active member renders their initial normally.
+        expect(find.text('A'), findsOneWidget);
       });
     });
 

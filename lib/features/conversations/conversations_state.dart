@@ -12,6 +12,10 @@ class ConversationSummary {
   final bool hasUnread;
   final bool isOtherUserActive;
   final DateTime? otherUserLastActiveAt;
+  // Count of other members whose account was deleted (server nulled user_id).
+  // Not in `members` — they have no User to carry. The screen renders one
+  // deleted-user avatar (spec §4) per count.
+  final int deletedMemberCount;
 
   const ConversationSummary({
     required this.conversation,
@@ -22,6 +26,7 @@ class ConversationSummary {
     this.hasUnread = false,
     this.isOtherUserActive = false,
     this.otherUserLastActiveAt,
+    this.deletedMemberCount = 0,
   });
 
   ConversationSummary copyWith({
@@ -33,6 +38,7 @@ class ConversationSummary {
     bool? hasUnread,
     bool? isOtherUserActive,
     DateTime? Function()? otherUserLastActiveAt,
+    int? deletedMemberCount,
   }) {
     return ConversationSummary(
       conversation: conversation ?? this.conversation,
@@ -46,6 +52,7 @@ class ConversationSummary {
       otherUserLastActiveAt: otherUserLastActiveAt != null
           ? otherUserLastActiveAt()
           : this.otherUserLastActiveAt,
+      deletedMemberCount: deletedMemberCount ?? this.deletedMemberCount,
     );
   }
 
@@ -60,7 +67,8 @@ class ConversationSummary {
         other.lastMessageAt == lastMessageAt &&
         other.hasUnread == hasUnread &&
         other.isOtherUserActive == isOtherUserActive &&
-        other.otherUserLastActiveAt == otherUserLastActiveAt;
+        other.otherUserLastActiveAt == otherUserLastActiveAt &&
+        other.deletedMemberCount == deletedMemberCount;
   }
 
   @override
@@ -73,6 +81,7 @@ class ConversationSummary {
         hasUnread,
         isOtherUserActive,
         otherUserLastActiveAt,
+        deletedMemberCount,
       );
 }
 

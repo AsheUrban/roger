@@ -133,7 +133,11 @@ class _ConversationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isGroup = summary.members.length > 1;
+    // Deleted members aren't in `members`; count both toward group-vs-1:1.
+    final otherSlots = summary.members.length + summary.deletedMemberCount;
+    final isGroup = otherSlots > 1;
+    final isDeleted1to1 =
+        !isGroup && summary.members.isEmpty && summary.deletedMemberCount > 0;
 
     return GestureDetector(
       onTap: onTap,
@@ -142,20 +146,24 @@ class _ConversationRow extends StatelessWidget {
         child: Row(
           children: [
             // Avatar area
-            isGroup
-                ? _GroupAvatar(
-                    members: summary.members,
-                    contactNames: summary.memberContactNames,
-                  )
-                : _SingleAvatar(
-                    member: summary.members.isNotEmpty
-                        ? summary.members.first
-                        : null,
-                    contactName: summary.memberContactNames.isNotEmpty
-                        ? summary.memberContactNames.first
-                        : '?',
-                    isActive: summary.isOtherUserActive,
-                  ),
+            if (isGroup)
+              _GroupAvatar(
+                members: summary.members,
+                contactNames: summary.memberContactNames,
+                deletedMemberCount: summary.deletedMemberCount,
+              )
+            else if (isDeleted1to1)
+              const _DeletedAvatar(size: 46)
+            else
+              _SingleAvatar(
+                member: summary.members.isNotEmpty
+                    ? summary.members.first
+                    : null,
+                contactName: summary.memberContactNames.isNotEmpty
+                    ? summary.memberContactNames.first
+                    : '?',
+                isActive: summary.isOtherUserActive,
+              ),
 
             const SizedBox(width: 14),
 
@@ -281,28 +289,69 @@ class _SingleAvatar extends StatelessWidget {
 class _GroupAvatar extends StatelessWidget {
   final List<User> members;
   final List<String> contactNames;
+  final int deletedMemberCount;
 
-  const _GroupAvatar({required this.members, required this.contactNames});
+  const _GroupAvatar({
+    required this.members,
+    required this.contactNames,
+    this.deletedMemberCount = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final capped = members.take(3).toList();
+    // Cluster of up to 3 faces: active members first, then a deleted-user
+    // treatment (spec §4) for each deleted slot. Order in the cluster carries
+    // no meaning, so a count is enough to place the deleted faces.
+    final minis = <Widget>[];
+    for (var i = 0; i < members.length && minis.length < 3; i++) {
+      minis.add(_MiniAvatar(
+        avatarColor: members[i].avatarColor,
+        contactName: i < contactNames.length ? contactNames[i] : '?',
+      ));
+    }
+    for (var i = 0; i < deletedMemberCount && minis.length < 3; i++) {
+      minis.add(const _DeletedAvatar(size: 28, bordered: true));
+    }
 
     return SizedBox(
       width: 52,
       height: 40,
       child: Stack(
         children: [
-          for (var i = 0; i < capped.length; i++)
+          for (var i = 0; i < minis.length; i++)
             Positioned(
               left: i * 14.0,
               top: i % 2 == 0 ? 0.0 : 8.0,
-              child: _MiniAvatar(
-                avatarColor: capped[i].avatarColor,
-                contactName: i < contactNames.length ? contactNames[i] : '?',
-              ),
+              child: minis[i],
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _DeletedAvatar extends StatelessWidget {
+  final double size;
+  final bool bordered;
+
+  const _DeletedAvatar({required this.size, this.bordered = false});
+
+  @override
+  Widget build(BuildContext context) {
+    // Spec §4 Deleted-User Avatar: a solid warm-white (#FAFAF5) circle with a
+    // charcoal (#1E1D18) dash — no initial, no personal color. A deliberate
+    // "this changed" signal. The border matches _MiniAvatar so a deleted face
+    // reads as part of a group cluster.
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: warmWhite,
+        shape: BoxShape.circle,
+        border: bordered ? Border.all(color: charcoal, width: 1.5) : null,
+      ),
+      child: Center(
+        child: Icon(Icons.remove, color: charcoal, size: size * 0.5),
       ),
     );
   }
