@@ -29,6 +29,16 @@ final _otherUser = User(
   createdAt: DateTime(2026, 1, 1),
 );
 
+// phoneNumber is '' deliberately — under the privacy rework the conversations
+// join no longer returns a phone, and names resolve from the addedContacts map
+// by userId. The User.phoneNumber field itself is removed in the auth slice.
+final _userU1 = User(
+  id: 'u1',
+  phoneNumber: '',
+  avatarColor: 'Rust',
+  createdAt: DateTime(2026, 1, 1),
+);
+
 ConversationSummary _makeSummary({
   required Conversation conversation,
   String displayName = 'Test',
@@ -217,6 +227,82 @@ void main() {
         final conv2 = conversations.firstWhere((c) => c.conversation.id == 'conv-2');
         expect(conv2.hasUnread, false);
         expect(conv2.displayName, 'Conv Two');
+      });
+    });
+
+    group('reresolveNames (display-name "?" reactivity fix)', () {
+      test('re-resolves member and display names from an updated map', () {
+        // A member you hadn't picked yet renders as "?" at load. When the
+        // addedContacts map gains their name, the notifier re-resolves.
+        final seed = ConversationsState(
+          conversations: [
+            ConversationSummary(
+              conversation: _conv1,
+              displayName: '?',
+              members: [_userU1],
+              memberContactNames: const ['?'],
+            ),
+          ],
+        );
+        final container = makeContainer(seed: seed);
+        container
+            .read(conversationsProvider.notifier)
+            .reresolveNames({'u1': 'Jordan'});
+
+        final updated =
+            container.read(conversationsProvider).conversations.first;
+        expect(updated.displayName, 'Jordan');
+        expect(updated.memberContactNames, ['Jordan']);
+      });
+
+      test('a member still absent from the map stays "?"', () {
+        final seed = ConversationsState(
+          conversations: [
+            ConversationSummary(
+              conversation: _conv1,
+              displayName: '?',
+              members: [_userU1],
+              memberContactNames: const ['?'],
+            ),
+          ],
+        );
+        final container = makeContainer(seed: seed);
+        container
+            .read(conversationsProvider.notifier)
+            .reresolveNames(const {'someone-else': 'Casey'});
+
+        final updated =
+            container.read(conversationsProvider).conversations.first;
+        expect(updated.displayName, '?');
+        expect(updated.memberContactNames, ['?']);
+      });
+
+      test('a group with a set name keeps it; member names still re-resolve',
+          () {
+        final groupConv = Conversation(
+          id: 'g1',
+          name: 'Trip crew',
+          createdAt: DateTime(2026, 1, 1),
+        );
+        final seed = ConversationsState(
+          conversations: [
+            ConversationSummary(
+              conversation: groupConv,
+              displayName: 'Trip crew',
+              members: [_userU1],
+              memberContactNames: const ['?'],
+            ),
+          ],
+        );
+        final container = makeContainer(seed: seed);
+        container
+            .read(conversationsProvider.notifier)
+            .reresolveNames({'u1': 'Jordan'});
+
+        final updated =
+            container.read(conversationsProvider).conversations.first;
+        expect(updated.displayName, 'Trip crew'); // group name wins
+        expect(updated.memberContactNames, ['Jordan']); // for avatar initials
       });
     });
   });

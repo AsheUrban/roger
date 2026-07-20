@@ -4,7 +4,7 @@ void main() {
   group('SettingsNotifier', skip: 'feature not built — step 8', () {
     test('loadSettings populates user and settings state', () {});
 
-    test('updatePhoneNumber updates number directly (no OTP at MVP)', () {});
+    test('updatePhoneNumber requires OTP verification to the new number', () {});
 
     test('updateAvatarColor changes color globally', () {});
 
