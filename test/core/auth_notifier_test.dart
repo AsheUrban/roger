@@ -49,7 +49,6 @@ supa.Session _session() => supa.Session(
 
 User _appUser() => User(
       id: 'auth-user-id',
-      phoneNumber: '+15550001000',
       avatarColor: 'Rust',
       createdAt: DateTime(2026, 1, 1),
     );

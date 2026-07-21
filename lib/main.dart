@@ -11,7 +11,6 @@ import 'core/providers.dart';
 import 'core/services/database_key_service.dart';
 import 'core/theme/colors.dart';
 import 'features/conversations/conversations_screen.dart';
-import 'features/search/search_notifier.dart';
 import 'features/search/search_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
@@ -110,28 +109,7 @@ class RogerApp extends ConsumerStatefulWidget {
   ConsumerState<RogerApp> createState() => _RogerAppState();
 }
 
-class _RogerAppState extends ConsumerState<RogerApp>
-    with WidgetsBindingObserver {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // Fire-and-forget — refreshContacts has its own in-flight guard.
-      ref.read(searchProvider.notifier).refreshContacts();
-    }
-  }
-
+class _RogerAppState extends ConsumerState<RogerApp> {
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);

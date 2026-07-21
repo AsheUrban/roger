@@ -21,8 +21,7 @@ void main() {
 
     test('two instances with same field values are equal (shared refs)', () {
       final user = User(
-        id: 'u-1',
-        phoneNumber: '+15551111111',
+        id: 'u-1',
         avatarColor: 'Rust',
         createdAt: DateTime(2026, 1, 1),
       );
@@ -50,14 +49,12 @@ void main() {
 
     test('not equal when user differs (different identity)', () {
       final userA = User(
-        id: 'u-1',
-        phoneNumber: '+15551111111',
+        id: 'u-1',
         avatarColor: 'Rust',
         createdAt: DateTime(2026, 1, 1),
       );
       final userB = User(
-        id: 'u-2',
-        phoneNumber: '+15552222222',
+        id: 'u-2',
         avatarColor: 'Olive',
         createdAt: DateTime(2026, 1, 1),
       );

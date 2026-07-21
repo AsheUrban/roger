@@ -29,8 +29,6 @@ class OnboardingScreen extends ConsumerWidget {
           child: switch (state.step) {
             OnboardingStep.phoneEntry => const _PhoneEntryStep(),
             OnboardingStep.otpVerification => const _OtpVerificationStep(),
-            OnboardingStep.contactsPermission =>
-              const _ContactsPermissionStep(),
           },
         ),
       ),
@@ -192,55 +190,6 @@ class _OtpVerificationStepState extends ConsumerState<_OtpVerificationStep> {
             style: t.buttonLabel,
           ),
         ),
-        const Spacer(flex: 2),
-      ],
-    );
-  }
-}
-
-// ============================================================
-// Contacts Permission
-// ============================================================
-class _ContactsPermissionStep extends ConsumerWidget {
-  const _ContactsPermissionStep();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(onboardingProvider);
-    final notifier = ref.read(onboardingProvider.notifier);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _BackButton(onPressed: notifier.goBack),
-        const Spacer(),
-        const Text(
-          'Find your people',
-          style: t.titleLarge,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Allow contacts access to find friends on roger. '
-          'Rest assured, unencrypted numbers never leave your phone.',
-          style: t.bodySubdued,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 32),
-        _PrimaryButton(
-          label: 'Allow contacts',
-          isLoading: state.isLoading,
-          onPressed: notifier.requestContactsPermission,
-        ),
-        const SizedBox(height: 12),
-        TextButton(
-          onPressed: state.isLoading ? null : notifier.skipContactsPermission,
-          child: const Text(
-            'Not now',
-            style: t.buttonLabel,
-          ),
-        ),
-        _ErrorText(state.error),
         const Spacer(flex: 2),
       ],
     );

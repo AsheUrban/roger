@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart' as t;
-import '../../core/utils/time_format.dart';
 import '../../core/widgets/primary_action_pill.dart';
 import 'search_notifier.dart';
 import 'search_state.dart';
@@ -73,7 +72,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title row — changes in group mode
                   if (state.isGroupMode)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -88,66 +86,79 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   else
                     Text('Find people', style: t.screenTitle),
                   const SizedBox(height: 14),
-                  // Search bar
-                  GestureDetector(
-                    onTap: !state.hasContactsPermission
-                        ? () => notifier.requestContactsPermission()
-                        : null,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: charcoal2,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.search,
-                            size: 15,
-                            color: warmWhite.withValues(alpha: 0.3),
+                  // Search bar — filters people you've added, by name.
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: charcoal2,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.search,
+                          size: 15,
+                          color: warmWhite.withValues(alpha: 0.3),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            focusNode: _focusNode,
+                            onChanged: notifier.search,
+                            style: t.searchHint.copyWith(color: warmWhite),
+                            decoration: InputDecoration(
+                              hintText: 'Search people you’ve added',
+                              hintStyle: t.searchHint,
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: state.hasContactsPermission
-                                ? TextField(
-                                    controller: _searchController,
-                                    focusNode: _focusNode,
-                                    onChanged: notifier.search,
-                                    style: t.searchHint.copyWith(
-                                      color: warmWhite,
-                                    ),
-                                    decoration: InputDecoration(
-                                      hintText: 'Search contacts',
-                                      hintStyle: t.searchHint,
-                                      border: InputBorder.none,
-                                      isDense: true,
-                                      contentPadding: EdgeInsets.zero,
-                                    ),
-                                  )
-                                : IgnorePointer(
-                                    child: Text(
-                                      'Search contacts',
-                                      style: t.searchHint,
-                                    ),
-                                  ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
 
-            // "New group" option — visible when search bar is focused,
-            // query is empty, not already in group mode
-            if (_isFocused &&
-                state.query.isEmpty &&
-                !state.isGroupMode &&
-                state.hasContactsPermission)
+            // "Add someone" — opens the OS contact picker (no permission).
+            if (!state.isGroupMode)
+              GestureDetector(
+                key: const Key('add-someone'),
+                behavior: HitTestBehavior.opaque,
+                onTap: notifier.addSomeone,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: const BoxDecoration(
+                          color: charcoal2,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.person_add_alt,
+                              color: warmWhite, size: 20),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Text('Add someone', style: t.rowName),
+                    ],
+                  ),
+                ),
+              ),
+
+            // "New group" — visible when the bar is focused, not already in
+            // group mode.
+            if (_isFocused && state.query.isEmpty && !state.isGroupMode)
               GestureDetector(
                 onTap: () {
                   _focusNode.unfocus();
@@ -166,11 +177,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: const Center(
-                          child: Icon(
-                            Icons.group_add_outlined,
-                            color: warmWhite,
-                            size: 20,
-                          ),
+                          child: Icon(Icons.group_add_outlined,
+                              color: warmWhite, size: 20),
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -180,65 +188,59 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
               ),
 
+            // Not-on-roger notice after a pick.
+            if (state.notOnRogerName != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Text(
+                  '${state.notOnRogerName} isn’t on roger yet.',
+                  style: t.bodyDimmed,
+                ),
+              ),
+
             // Results list
             Expanded(
               child: state.isLoading
-                  ? const Center(
-                      child: t.loadingSpinner,
-                    )
+                  ? const Center(child: t.loadingSpinner)
                   : state.results.isEmpty
                       ? _EmptyState(query: state.query)
-                      : RefreshIndicator(
-                          color: warmWhite,
-                          backgroundColor: charcoal2,
-                          onRefresh: () =>
-                              ref.read(searchProvider.notifier).refreshContacts(),
-                          child: ListView.separated(
-                            key: const Key('search-results-list'),
-                            itemCount: state.results.length,
-                            separatorBuilder: (_, _) => Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 20),
-                              child: Divider(
-                                height: 0.5,
-                                thickness: 0.5,
-                                color: t.listDividerColor,
-                              ),
+                      : ListView.separated(
+                          key: const Key('search-results-list'),
+                          itemCount: state.results.length,
+                          separatorBuilder: (_, _) => Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 20),
+                            child: Divider(
+                              height: 0.5,
+                              thickness: 0.5,
+                              color: t.listDividerColor,
                             ),
-                            itemBuilder: (context, index) {
-                              final result = state.results[index];
-                              return _SearchResultRow(
-                                result: result,
-                                isGroupMode: state.isGroupMode,
-                                isSelected: result.rogerUser != null &&
-                                    state.selectedUserIds
-                                        .contains(result.rogerUser!.id),
-                                onChat: () async {
-                                  final convId = await notifier
-                                      .startChat(result.rogerUser!.id);
-                                  if (context.mounted) {
-                                    context.go('/camera/$convId');
-                                  }
-                                },
-                                onInvite: () {
-                                  notifier.sendInvite(result.phoneNumber);
-                                },
-                                onToggleSelect: result.rogerUser != null
-                                    ? () => notifier.toggleContactSelection(
-                                        result.rogerUser!.id)
-                                    : null,
-                                onLongPress: result.rogerUser != null &&
-                                        !state.isGroupMode
-                                    ? () => notifier.enterGroupModeWithContact(
-                                        result.rogerUser!.id)
-                                    : null,
-                              );
-                            },
                           ),
+                          itemBuilder: (context, index) {
+                            final result = state.results[index];
+                            return _AddedContactRow(
+                              result: result,
+                              isGroupMode: state.isGroupMode,
+                              isSelected:
+                                  state.selectedUserIds.contains(result.userId),
+                              onChat: () async {
+                                final convId =
+                                    await notifier.startChat(result.userId);
+                                if (context.mounted) {
+                                  context.go('/camera/$convId');
+                                }
+                              },
+                              onToggleSelect: () =>
+                                  notifier.toggleContactSelection(result.userId),
+                              onLongPress: !state.isGroupMode
+                                  ? () => notifier
+                                      .enterGroupModeWithContact(result.userId)
+                                  : null,
+                            );
+                          },
                         ),
             ),
 
-            // Error
             if (state.error != null)
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -256,9 +258,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
                   color: charcoal2,
-                  border: Border(
-                    top: BorderSide(color: t.listDividerColor),
-                  ),
+                  border: Border(top: BorderSide(color: t.listDividerColor)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -283,22 +283,20 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 }
 
-class _SearchResultRow extends StatelessWidget {
-  final SearchResult result;
+class _AddedContactRow extends StatelessWidget {
+  final AddedContactResult result;
   final bool isGroupMode;
   final bool isSelected;
   final VoidCallback onChat;
-  final VoidCallback onInvite;
-  final VoidCallback? onToggleSelect;
+  final VoidCallback onToggleSelect;
   final VoidCallback? onLongPress;
 
-  const _SearchResultRow({
+  const _AddedContactRow({
     required this.result,
     required this.isGroupMode,
     required this.isSelected,
     required this.onChat,
-    required this.onInvite,
-    this.onToggleSelect,
+    required this.onToggleSelect,
     this.onLongPress,
   });
 
@@ -307,101 +305,59 @@ class _SearchResultRow extends StatelessWidget {
     final displayName =
         result.contactName.isNotEmpty ? result.contactName : '?';
     final initials = displayName != '?' ? displayName[0].toUpperCase() : '?';
-
-    final avatarColorName = result.rogerUser?.avatarColor ?? 'Charcoal';
-    final colors = avatarColorMap[avatarColorName] ?? (charcoal2, warmWhite);
+    final colors = avatarColorMap[result.avatarColor] ?? (charcoal2, warmWhite);
 
     return GestureDetector(
-      onTap: isGroupMode && onToggleSelect != null ? onToggleSelect : null,
+      onTap: isGroupMode ? onToggleSelect : null,
       onLongPress: onLongPress,
-      child: Opacity(
-        opacity: isGroupMode && !result.isOnRoger
-            ? 0.2
-            : (result.isOnRoger ? 1.0 : 0.45),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Row(
-            children: [
-              // Checkbox in group mode
-              if (isGroupMode) ...[
-                Icon(
-                  isSelected
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                  color: isSelected
-                      ? warmWhite
-                      : warmWhite.withValues(alpha: 0.3),
-                  size: 22,
-                ),
-                const SizedBox(width: 12),
-              ],
-
-              // Avatar
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: colors.$1,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    initials,
-                    style: t.avatarInitialLarge.copyWith(color: colors.$2),
-                  ),
-                ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Row(
+          children: [
+            if (isGroupMode) ...[
+              Icon(
+                isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: isSelected ? warmWhite : warmWhite.withValues(alpha: 0.3),
+                size: 22,
               ),
-              const SizedBox(width: 14),
-
-              // Name + last active
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      displayName,
-                      style: t.rowName,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (result.isOnRoger &&
-                        result.rogerUser?.lastActiveAt != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          formatLastActive(result.rogerUser!.lastActiveAt!),
-                          style: t.timestamp,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-
-              // Action area — different in group mode vs normal
-              if (!isGroupMode) ...[
-                if (result.isOnRoger)
-                  GestureDetector(
-                    onTap: onChat,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 5),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: warmWhite, width: 1.5),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text('Chat', style: t.pillLabel),
-                    ),
-                  )
-                else if (result.hasPendingInvite)
-                  Text('Pending', style: t.pendingLabel)
-                else
-                  GestureDetector(
-                    onTap: onInvite,
-                    child: Text('Invite \u2192', style: t.inviteArrow),
-                  ),
-              ],
+              const SizedBox(width: 12),
             ],
-          ),
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: colors.$1,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  initials,
+                  style: t.avatarInitialLarge.copyWith(color: colors.$2),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                displayName,
+                style: t.rowName,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (!isGroupMode)
+              GestureDetector(
+                onTap: onChat,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: warmWhite, width: 1.5),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text('Chat', style: t.pillLabel),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -487,7 +443,7 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = query.isNotEmpty
         ? 'No results for "$query"'
-        : 'Your contacts will appear here.';
+        : 'Add someone to start a conversation.';
 
     return Center(
       child: Text(text, style: t.placeholderText),

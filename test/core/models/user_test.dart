@@ -3,7 +3,6 @@ import 'package:roger/core/models/user.dart';
 
 User _baseUser({
   String id = 'u-1',
-  String phoneNumber = '+15551111111',
   String avatarColor = 'Rust',
   String? recoveryEmail,
   DateTime? lastActiveAt,
@@ -11,7 +10,6 @@ User _baseUser({
 }) {
   return User(
     id: id,
-    phoneNumber: phoneNumber,
     avatarColor: avatarColor,
     recoveryEmail: recoveryEmail,
     lastActiveAt: lastActiveAt,
@@ -43,13 +41,6 @@ void main() {
 
     test('not equal when id differs', () {
       expect(_baseUser(id: 'u-1'), isNot(equals(_baseUser(id: 'u-2'))));
-    });
-
-    test('not equal when phoneNumber differs', () {
-      expect(
-        _baseUser(phoneNumber: '+15551111111'),
-        isNot(equals(_baseUser(phoneNumber: '+15552222222'))),
-      );
     });
 
     test('not equal when avatarColor differs', () {

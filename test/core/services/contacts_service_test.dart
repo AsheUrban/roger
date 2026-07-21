@@ -15,6 +15,13 @@ void main() {
   });
 
   group('ContactsService', () {
+    // Single-pick discovery (spec §10): the client sends one picked number to
+    // the discover_user RPC and gets back a match or nothing. The number is
+    // hashed + matched server-side (peppered), never on the client — so there
+    // is no client-side hashing to test anymore. normalizeToE164 is the one
+    // remaining pure function; discover() and pickContact() are integration
+    // (real Supabase / the OS picker).
+
     group('phone number normalization', () {
       test('strips spaces, dashes, and parentheses', () {
         expect(service.normalizeToE164('(555) 123-4567'), '+15551234567');
@@ -44,63 +51,17 @@ void main() {
       });
     });
 
-    group('hashing', () {
-      test('hashes phone number deterministically', () {
-        final hash1 = service.hashPhoneNumber('+15551234567');
-        final hash2 = service.hashPhoneNumber('+15551234567');
-        expect(hash1, hash2);
-      });
+    group('discovery', () {
+      test('single-number match against the discover_user RPC',
+          skip: 'Integration test — needs real Supabase', () {});
 
-      test('different numbers produce different hashes', () {
-        final hash1 = service.hashPhoneNumber('+15551234567');
-        final hash2 = service.hashPhoneNumber('+15559999999');
-        expect(hash1, isNot(equals(hash2)));
-      });
-
-      test('produces valid SHA-256 hex string (64 characters)', () {
-        final hash = service.hashPhoneNumber('+15551234567');
-        expect(hash.length, 64);
-        expect(RegExp(r'^[a-f0-9]+$').hasMatch(hash), true);
-      });
+      test('the picked number is never hashed or stored client-side',
+          skip: 'Integration test — needs real Supabase', () {});
     });
 
-    group('permissions', () {
-      test('requestPermission returns grant status',
-          skip: 'Integration test — needs real permission_handler',
-          () {});
-
-      test('hasPermission checks current state',
-          skip: 'Integration test — needs real permission_handler',
-          () {});
-    });
-
-    group('batch check', () {
-      test('sends hashes to server, returns matching roger users',
-          skip: 'Integration test — needs real Supabase',
-          () {});
-
-      test('raw numbers never leave device — only hashes sent',
-          skip: 'Integration test — needs real Supabase',
-          () {});
-    });
-
-    group('on-demand search', () {
-      test('normalizes query before hashing', () {
-        final normalized = service.normalizeToE164('(555) 123-4567');
-        final hash = service.hashPhoneNumber(normalized);
-        final directHash = service.hashPhoneNumber('+15551234567');
-        expect(hash, directHash);
-      });
-    });
-
-    group('cached data', () {
-      test('cachedRogerUsers starts empty', () {
-        expect(service.cachedRogerUsers, isEmpty);
-      });
-
-      test('cachedContacts starts empty', () {
-        expect(service.cachedContacts, isEmpty);
-      });
+    group('pickContact', () {
+      test('opens the OS picker and returns one contact, no permission',
+          skip: 'Integration test — needs the device contact picker', () {});
     });
   });
 }

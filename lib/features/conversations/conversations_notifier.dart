@@ -124,9 +124,6 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
 
             members.add(User(
               id: userId,
-              // Transitional: the join no longer carries a phone, and the
-              // User.phoneNumber field is removed in the auth slice (tracked).
-              phoneNumber: '',
               avatarColor: avatarColor,
               lastActiveAt: ud['last_active_at'] != null
                   ? DateTime.parse(ud['last_active_at'] as String)

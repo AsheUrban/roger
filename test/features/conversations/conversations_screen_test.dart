@@ -13,7 +13,6 @@ import 'package:roger/features/conversations/conversations_state.dart';
 
 final _activeUser = User(
   id: 'user-1',
-  phoneNumber: '+15551111111',
   avatarColor: 'Rust',
   lastActiveAt: DateTime.now().subtract(const Duration(minutes: 3)),
   createdAt: DateTime(2026, 1, 1),
@@ -21,7 +20,6 @@ final _activeUser = User(
 
 final _inactiveUser = User(
   id: 'user-2',
-  phoneNumber: '+15552222222',
   avatarColor: 'Cornflower',
   lastActiveAt: DateTime.now().subtract(const Duration(hours: 3)),
   createdAt: DateTime(2026, 1, 1),

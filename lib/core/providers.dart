@@ -35,21 +35,6 @@ final currentUserIdProvider = Provider<String?>((ref) {
   return Supabase.instance.client.auth.currentUser?.id;
 });
 
-/// Tracks whether the user explicitly skipped contacts permission during onboarding.
-/// SearchNotifier checks this before auto-loading contacts.
-/// Cleared when the user later grants permission via the search bar.
-class ContactsDeclinedNotifier extends Notifier<bool> {
-  @override
-  bool build() => false;
-
-  void setDeclined(bool value) => state = value;
-}
-
-final contactsDeclinedProvider =
-    NotifierProvider<ContactsDeclinedNotifier, bool>(
-  ContactsDeclinedNotifier.new,
-);
-
 /// Initialized in main() via ProviderScope override after the DB key is ready.
 /// Throws if accessed before initialization — this is intentional.
 final appDatabaseProvider = Provider<AppDatabase>((ref) {

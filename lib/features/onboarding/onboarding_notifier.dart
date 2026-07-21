@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth_notifier.dart';
 import '../../core/providers.dart';
 import '../../core/services/auth_service.dart';
-import '../../core/services/contacts_service.dart';
 import '../../core/theme/colors.dart';
 import 'onboarding_state.dart';
 
@@ -20,13 +19,11 @@ final onboardingProvider =
 
 class OnboardingNotifier extends Notifier<OnboardingState> {
   late final AuthService _authService;
-  late final ContactsService _contactsService;
   late final Random _random;
 
   @override
   OnboardingState build() {
     _authService = ref.read(authServiceProvider);
-    _contactsService = ref.read(contactsServiceProvider);
     _random = ref.read(randomProvider);
     return const OnboardingState();
   }
@@ -35,7 +32,6 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
     final previous = switch (state.step) {
       OnboardingStep.phoneEntry => OnboardingStep.phoneEntry,
       OnboardingStep.otpVerification => OnboardingStep.phoneEntry,
-      OnboardingStep.contactsPermission => OnboardingStep.otpVerification,
     };
 
     state = state.copyWith(step: previous, error: () => null);
@@ -160,14 +156,15 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
           : avatarColors[_random.nextInt(avatarColors.length)];
       state = state.copyWith(avatarColor: color);
 
-      await _authService.createAccount(
-        phoneNumber: state.phoneNumber,
-        avatarColor: color,
-      );
+      await _authService.createAccount(avatarColor: color);
       if (!ref.mounted) return;
+      // Land straight on Search — there is no contacts-permission step under
+      // single-pick (spec §10). Flip cached auth state before the screen's
+      // navigation so the redirect doesn't bounce.
+      ref.read(authProvider.notifier).markOnboarded();
       state = state.copyWith(
-        step: OnboardingStep.contactsPermission,
         isLoading: false,
+        onboardingComplete: true,
       );
     } catch (_) {
       if (!ref.mounted) return;
@@ -179,30 +176,4 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
     }
   }
 
-  Future<void> requestContactsPermission() async {
-    final granted = await _contactsService.requestPermission();
-    if (!ref.mounted) return;
-
-    if (granted) {
-      // Fire and forget — hashed batch check runs in background,
-      // must not block landing on Search (spec AC)
-      _contactsService.refreshBatchCheck();
-    }
-
-    await completeOnboarding();
-  }
-
-  Future<void> skipContactsPermission() async {
-    ref.read(contactsDeclinedProvider.notifier).setDeclined(true);
-    await completeOnboarding();
-  }
-
-  Future<void> completeOnboarding() async {
-    // Account creation moved to verifyOtp (spec §18). This is now just the
-    // post-permission handoff: flip cached auth state to Onboarded before
-    // the screen's `context.go('/search')` so the synchronous redirect sees
-    // the new state and doesn't bounce.
-    ref.read(authProvider.notifier).markOnboarded();
-    state = state.copyWith(onboardingComplete: true);
-  }
 }

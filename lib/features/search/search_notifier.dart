@@ -1,12 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/models/user.dart';
+import '../../core/added_contacts_notifier.dart';
 import '../../core/providers.dart';
 import '../../core/services/contacts_service.dart';
 import '../../core/services/conversation_service.dart';
-import '../../core/services/invite_service.dart';
 import 'search_state.dart';
 
 final searchProvider =
@@ -15,115 +12,87 @@ final searchProvider =
 class SearchNotifier extends Notifier<SearchState> {
   late final ContactsService _contactsService;
   late final ConversationService _conversationService;
-  late final InviteService _inviteService;
   late final String? _currentUserId;
-  Timer? _debounceTimer;
-  bool _refreshInFlight = false;
 
   @override
   SearchState build() {
     _contactsService = ref.read(contactsServiceProvider);
     _conversationService = ref.read(conversationServiceProvider);
-    _inviteService = ref.read(inviteServiceProvider);
     _currentUserId = ref.read(currentUserIdProvider);
 
-    ref.onDispose(() {
-      _debounceTimer?.cancel();
-    });
+    // Re-load the added-contacts list whenever the store changes (e.g. a fresh
+    // pick lands), so the list stays in sync without a manual refresh.
+    ref.listen(addedContactsProvider, (_, _) => _loadAddedContacts());
 
-    // Check permission and load contacts if granted
-    _initAsync();
-
+    Future.microtask(_loadAddedContacts);
     return const SearchState();
   }
 
-  Future<void> _initAsync() async {
-    // Respect user's choice to skip contacts during onboarding,
-    // even if OS permission was already granted from a previous install
-    final declined = ref.read(contactsDeclinedProvider);
-    if (declined) return;
-
-    final granted = await _contactsService.hasPermission();
+  /// Loads the "people you've added" list from the AddedContacts drift store,
+  /// applying the current name filter. Everyone in the store is on roger
+  /// (they only land there when `discover_user` matched).
+  Future<void> _loadAddedContacts() async {
+    final rows =
+        await ref.read(appDatabaseProvider).addedContactsDao.getAddedContacts();
     if (!ref.mounted) return;
-    if (granted) {
-      state = state.copyWith(hasContactsPermission: true);
-      loadInitialContacts();
-    }
+    state = state.copyWith(results: _buildResults(rows, filter: state.query));
   }
 
-  Future<void> loadInitialContacts() async {
-    state = state.copyWith(isLoading: true, error: () => null);
-
-    try {
-      await _contactsService.refreshBatchCheck();
-      if (!ref.mounted) return;
-      state = state.copyWith(
-        hasContactsPermission: true,
-        results: _buildResults(),
-        isLoading: false,
-      );
-    } catch (e) {
-      if (!ref.mounted) return;
-      state = state.copyWith(
-        isLoading: false,
-        error: () => e.toString(),
-      );
-    }
+  List<AddedContactResult> _buildResults(
+    List<dynamic> rows, {
+    String? filter,
+  }) {
+    final q = (filter ?? '').toLowerCase();
+    final results = rows
+        .where((r) => q.isEmpty || (r.contactName as String).toLowerCase().contains(q))
+        .map((r) => AddedContactResult(
+              userId: r.userId as String,
+              contactName: r.contactName as String,
+              avatarColor: r.avatarColor as String,
+            ))
+        .toList();
+    results.sort((a, b) =>
+        a.contactName.toLowerCase().compareTo(b.contactName.toLowerCase()));
+    return results;
   }
 
-  /// Triggered on app foreground and by pull-to-refresh on Search.
-  /// Re-runs the hashed batch check and updates results. No-op if the user
-  /// declined contacts during onboarding, has not granted OS permission, or
-  /// a refresh is already in flight.
-  Future<void> refreshContacts() async {
-    if (_refreshInFlight) return;
-    if (ref.read(contactsDeclinedProvider)) return;
-    if (!state.hasContactsPermission) return;
-    _refreshInFlight = true;
-    try {
-      await _contactsService.refreshBatchCheck();
-      if (!ref.mounted) return;
-      state = state.copyWith(results: _buildResults(filter: state.query));
-    } finally {
-      _refreshInFlight = false;
-    }
-  }
-
-  Future<void> requestContactsPermission() async {
-    final granted = await _contactsService.requestPermission();
-    if (granted) {
-      // Clear the declined flag — user has now explicitly granted permission
-      ref.read(contactsDeclinedProvider.notifier).setDeclined(false);
-      state = state.copyWith(hasContactsPermission: true);
-      await loadInitialContacts();
-    }
-  }
-
+  /// Filters the added-contacts list by name. Local only — there is no server
+  /// search under single-pick (finding someone new is an explicit pick).
   Future<void> search(String query) async {
     state = state.copyWith(query: query, error: () => null);
+    await _loadAddedContacts();
+  }
 
-    if (query.isEmpty) {
-      state = state.copyWith(results: _buildResults());
-      return;
-    }
+  /// Opens the OS contact picker for one contact, checks it against roger via
+  /// `discover_user`, and — if matched — records it in AddedContacts (which
+  /// re-loads the list). A non-roger pick sets [SearchState.notOnRogerName]
+  /// (inviting them is a later slice). A cancelled pick is a no-op.
+  Future<void> addSomeone() async {
+    state = state.copyWith(notOnRogerName: () => null, error: () => null);
 
-    // Immediate local filter
-    state = state.copyWith(results: _buildResults(filter: query));
+    final picked = await _contactsService.pickContact();
+    if (!ref.mounted || picked == null) return;
 
-    // Debounced server check to catch new signups
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
-      try {
-        final serverResult = await _contactsService.onDemandSearch(query);
-        if (!ref.mounted) return;
-        if (serverResult != null) {
-          // Re-filter with updated data
-          state = state.copyWith(results: _buildResults(filter: query));
-        }
-      } catch (_) {
-        // Network failure on server check — fall back to local only
+    try {
+      final match = await _contactsService.discover(picked.phoneNumber);
+      if (!ref.mounted) return;
+
+      if (match == null) {
+        state = state.copyWith(notOnRogerName: () => picked.name);
+        return;
       }
-    });
+
+      // A roger match — record the picked name + discovered color. The
+      // addedContactsProvider listener re-loads the list.
+      await ref.read(addedContactsProvider.notifier).addContact(
+            userId: match.userId,
+            contactName: picked.name,
+            avatarColor: match.avatarColor,
+          );
+    } catch (e) {
+      if (!ref.mounted) return;
+      state = state.copyWith(error: () => e.toString());
+    }
   }
 
   /// Open the existing 1:1 with this user, or create one if none exists.
@@ -132,79 +101,6 @@ class SearchNotifier extends Notifier<SearchState> {
       currentUserId: _currentUserId!,
       otherUserId: userId,
     );
-  }
-
-  /// Create the pending conversation + invite for a non-roger contact, and
-  /// reflect the pending state in the search results.
-  Future<void> sendInvite(String phoneNumber) async {
-    try {
-      await _inviteService.sendInvite(
-        phoneNumber: phoneNumber,
-        currentUserId: _currentUserId!,
-      );
-      state = state.copyWith(
-        results: state.results
-            .map((r) => r.phoneNumber == phoneNumber
-                ? SearchResult(
-                    rogerUser: r.rogerUser,
-                    contactName: r.contactName,
-                    phoneNumber: r.phoneNumber,
-                    isOnRoger: r.isOnRoger,
-                    hasPendingInvite: true,
-                  )
-                : r)
-            .toList(),
-      );
-    } catch (e) {
-      state = state.copyWith(error: () => e.toString());
-    }
-  }
-
-  /// Build SearchResult list from cached contacts + roger users.
-  /// Sorted alphabetically by contact name.
-  List<SearchResult> _buildResults({String? filter}) {
-    final contacts = _contactsService.cachedContacts;
-    final rogerUsers = _contactsService.cachedRogerUsers;
-
-    // Build phone → roger user lookup
-    final rogerByPhone = <String, User>{};
-    for (final user in rogerUsers) {
-      rogerByPhone[user.phoneNumber] = user;
-    }
-
-    final results = <SearchResult>[];
-    final seenPhones = <String>{};
-
-    for (final contact in contacts) {
-      if (seenPhones.contains(contact.phoneNumber)) continue;
-      seenPhones.add(contact.phoneNumber);
-
-      final rogerUser = rogerByPhone[contact.phoneNumber];
-
-      // Skip showing yourself
-      if (rogerUser != null && rogerUser.id == _currentUserId) continue;
-
-      // Apply local text filter — contact name only
-      if (filter != null && filter.isNotEmpty) {
-        final q = filter.toLowerCase();
-        final nameMatch = contact.name.toLowerCase().contains(q);
-        if (!nameMatch) continue;
-      }
-
-      results.add(SearchResult(
-        rogerUser: rogerUser,
-        contactName: contact.name,
-        phoneNumber: contact.phoneNumber,
-        isOnRoger: rogerUser != null,
-      ));
-    }
-
-    // Sort alphabetically by contact name
-    results.sort((a, b) {
-      return a.contactName.toLowerCase().compareTo(b.contactName.toLowerCase());
-    });
-
-    return results;
   }
 
   // ── Group mode ──────────────────────────────────────────────────────────
@@ -226,7 +122,7 @@ class SearchNotifier extends Notifier<SearchState> {
     if (current.contains(userId)) {
       current.remove(userId);
     } else {
-      // Groups capped at 5 — you + 4 others
+      // Groups capped at 5 — you + 4 others.
       if (current.length >= 4) return;
       current.add(userId);
     }

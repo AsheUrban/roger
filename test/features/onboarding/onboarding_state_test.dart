@@ -5,7 +5,7 @@ void main() {
   group('OnboardingState equality', () {
     test('two instances with the same field values are equal', () {
       final a = OnboardingState(
-        step: OnboardingStep.contactsPermission,
+        step: OnboardingStep.otpVerification,
         phoneNumber: '+15551111111',
         avatarColor: 'Rust',
         isLoading: true,
@@ -13,7 +13,7 @@ void main() {
         onboardingComplete: true,
       );
       final b = OnboardingState(
-        step: OnboardingStep.contactsPermission,
+        step: OnboardingStep.otpVerification,
         phoneNumber: '+15551111111',
         avatarColor: 'Rust',
         isLoading: true,
@@ -69,7 +69,7 @@ void main() {
 
     test('copyWith with no changes produces an equal instance', () {
       final a = OnboardingState(
-        step: OnboardingStep.contactsPermission,
+        step: OnboardingStep.otpVerification,
         phoneNumber: '+15551111111',
         avatarColor: 'Rust',
       );

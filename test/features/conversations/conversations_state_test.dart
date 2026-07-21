@@ -138,9 +138,7 @@ void main() {
       final a = _summary(members: const []);
       final b = _summary(members: [
         User(
-          id: 'u-1',
-          phoneNumber: '+15551111111',
-          avatarColor: 'Rust',
+          id: 'u-1',          avatarColor: 'Rust',
           createdAt: DateTime(2026, 1, 1),
         ),
       ]);
@@ -215,17 +213,13 @@ void main() {
         () {
       final a = _summary(members: [
         User(
-          id: 'u-1',
-          phoneNumber: '+15551111111',
-          avatarColor: 'Rust',
+          id: 'u-1',          avatarColor: 'Rust',
           createdAt: DateTime(2026, 1, 1),
         ),
       ]);
       final b = _summary(members: [
         User(
-          id: 'u-1',
-          phoneNumber: '+15551111111',
-          avatarColor: 'Rust',
+          id: 'u-1',          avatarColor: 'Rust',
           createdAt: DateTime(2026, 1, 1),
         ),
       ]);

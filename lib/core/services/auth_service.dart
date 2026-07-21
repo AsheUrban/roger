@@ -35,7 +35,6 @@ class AuthService {
   }
 
   Future<app.User> createAccount({
-    required String phoneNumber,
     required String avatarColor,
   }) async {
     final authUser = _client.auth.currentUser;
@@ -43,16 +42,21 @@ class AuthService {
       throw Exception('Not authenticated.');
     }
 
-    // Atomic create — the create_account RPC (migration 00004) inserts the
-    // users and user_settings rows in a single transaction, so a failure can
-    // never leave a half-made account (orphaned users row with no settings).
-    // Returns the new users row; never needs a follow-up SELECT.
-    final row = await _client.rpc('create_account', params: {
-      'p_phone_number': phoneNumber,
+    // create_account (security definer) reads the verified phone from
+    // auth.users, writes users + user_settings atomically, and returns the new
+    // user id. The server owns identity, so we read the row back through the
+    // one authoritative path (getCurrentUser) rather than constructing a User
+    // client-side — the stored row carries the server's created_at and any
+    // defaults.
+    await _client.rpc('create_account', params: {
       'p_avatar_color': avatarColor,
     });
 
-    return _userFromRow(row as Map<String, dynamic>);
+    final user = await getCurrentUser();
+    if (user == null) {
+      throw Exception('Account creation did not produce a user row.');
+    }
+    return user;
   }
 
   Future<app.User?> getCurrentUser() async {
@@ -115,7 +119,6 @@ class AuthService {
   app.User _userFromRow(Map<String, dynamic> row) {
     return app.User(
       id: row['id'] as String,
-      phoneNumber: row['phone_number'] as String,
       avatarColor: row['avatar_color'] as String,
       recoveryEmail: row['recovery_email'] as String?,
       lastActiveAt: row['last_active_at'] != null

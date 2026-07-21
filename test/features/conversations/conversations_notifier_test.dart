@@ -24,17 +24,12 @@ final _conv2 = Conversation(id: 'conv-2', createdAt: DateTime(2026, 1, 2));
 
 final _otherUser = User(
   id: 'other-user',
-  phoneNumber: '+15551111111',
   avatarColor: 'Rust',
   createdAt: DateTime(2026, 1, 1),
 );
 
-// phoneNumber is '' deliberately — under the privacy rework the conversations
-// join no longer returns a phone, and names resolve from the addedContacts map
-// by userId. The User.phoneNumber field itself is removed in the auth slice.
 final _userU1 = User(
   id: 'u1',
-  phoneNumber: '',
   avatarColor: 'Rust',
   createdAt: DateTime(2026, 1, 1),
 );
@@ -62,8 +57,6 @@ void main() {
 
   setUp(() {
     contactsService = MockContactsService();
-    when(() => contactsService.cachedContacts).thenReturn([]);
-    when(() => contactsService.cachedRogerUsers).thenReturn([]);
     appDatabase = _makeInMemoryDatabase();
   });
 

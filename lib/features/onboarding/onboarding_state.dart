@@ -1,7 +1,6 @@
 enum OnboardingStep {
   phoneEntry,
   otpVerification,
-  contactsPermission,
 }
 
 class OnboardingState {
