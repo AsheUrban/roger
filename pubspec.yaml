@@ -24,6 +24,7 @@ dependencies:
   google_fonts: ^6.2.1
   intl_phone_number_input: ^0.7.5
   flutter_native_contact_picker: ^0.0.12
+  share_plus: ^12.0.2
 
 dev_dependencies:
   flutter_test:

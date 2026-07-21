@@ -8,7 +8,7 @@ import 'services/auth_service.dart';
 import 'services/contacts_service.dart';
 import 'services/conversation_service.dart';
 import 'services/database_key_service.dart';
-import 'services/invite_service.dart';
+import 'services/share_service.dart';
 
 final authServiceProvider = Provider<AuthService>(
   (ref) => AuthService(client: ref.read(supabaseClientProvider)),
@@ -19,12 +19,7 @@ final contactsServiceProvider = Provider<ContactsService>(
 final conversationServiceProvider = Provider<ConversationService>(
   (ref) => ConversationService(client: ref.read(supabaseClientProvider)),
 );
-final inviteServiceProvider = Provider<InviteService>(
-  (ref) => InviteService(
-    conversations: ref.read(conversationServiceProvider),
-    client: ref.read(supabaseClientProvider),
-  ),
-);
+final shareServiceProvider = Provider<ShareService>((ref) => ShareService());
 final randomProvider = Provider<Random>((ref) => Random());
 
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {

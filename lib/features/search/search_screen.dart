@@ -188,13 +188,34 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
               ),
 
-            // Not-on-roger notice after a pick.
+            // Not-on-roger notice after a pick, with an Invite affordance.
             if (state.notOnRogerName != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Text(
-                  '${state.notOnRogerName} isn’t on roger yet.',
-                  style: t.bodyDimmed,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${state.notOnRogerName} isn’t on roger yet.',
+                        style: t.bodySubdued,
+                      ),
+                    ),
+                    if (state.notOnRogerInvited)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.check, size: 15, color: warmWhite),
+                          const SizedBox(width: 4),
+                          Text('Invited', style: t.pillLabel),
+                        ],
+                      )
+                    else
+                      GestureDetector(
+                        key: const Key('invite-button'),
+                        onTap: notifier.invite,
+                        child: Text('Invite →', style: t.pillLabel),
+                      ),
+                  ],
                 ),
               ),
 

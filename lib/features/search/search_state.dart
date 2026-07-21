@@ -33,8 +33,11 @@ class SearchState {
   final bool isLoading;
   final String? error;
   // Set after a pick when the number isn't on roger. Cleared on the next pick
-  // or search. (Inviting a non-roger contact is a later slice.)
+  // or search.
   final String? notOnRogerName;
+  // True once the current non-roger pick has been invited — the notice shows
+  // "Invited" instead of the Invite action.
+  final bool notOnRogerInvited;
   final bool isGroupMode;
   final List<String> selectedUserIds;
 
@@ -44,6 +47,7 @@ class SearchState {
     this.isLoading = false,
     this.error,
     this.notOnRogerName,
+    this.notOnRogerInvited = false,
     this.isGroupMode = false,
     this.selectedUserIds = const [],
   });
@@ -54,6 +58,7 @@ class SearchState {
     bool? isLoading,
     String? Function()? error,
     String? Function()? notOnRogerName,
+    bool? notOnRogerInvited,
     bool? isGroupMode,
     List<String>? selectedUserIds,
   }) {
@@ -64,6 +69,7 @@ class SearchState {
       error: error != null ? error() : this.error,
       notOnRogerName:
           notOnRogerName != null ? notOnRogerName() : this.notOnRogerName,
+      notOnRogerInvited: notOnRogerInvited ?? this.notOnRogerInvited,
       isGroupMode: isGroupMode ?? this.isGroupMode,
       selectedUserIds: selectedUserIds ?? this.selectedUserIds,
     );
@@ -78,6 +84,7 @@ class SearchState {
         other.isLoading == isLoading &&
         other.error == error &&
         other.notOnRogerName == notOnRogerName &&
+        other.notOnRogerInvited == notOnRogerInvited &&
         other.isGroupMode == isGroupMode &&
         listEquals(other.selectedUserIds, selectedUserIds);
   }
@@ -89,6 +96,7 @@ class SearchState {
         isLoading,
         error,
         notOnRogerName,
+        notOnRogerInvited,
         isGroupMode,
         Object.hashAll(selectedUserIds),
       );

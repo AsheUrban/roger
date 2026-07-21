@@ -6,6 +6,7 @@ import 'package:roger/core/database/app_database.dart';
 import 'package:roger/core/providers.dart';
 import 'package:roger/core/services/contacts_service.dart';
 import 'package:roger/core/services/conversation_service.dart';
+import 'package:roger/core/services/share_service.dart';
 import 'package:roger/features/search/search_notifier.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -13,16 +14,20 @@ class MockContactsService extends Mock implements ContactsService {}
 
 class MockConversationService extends Mock implements ConversationService {}
 
+class MockShareService extends Mock implements ShareService {}
+
 class MockSupabaseClient extends Mock implements SupabaseClient {}
 
 void main() {
   late MockContactsService contactsService;
   late MockConversationService conversationService;
+  late MockShareService shareService;
   late AppDatabase appDatabase;
 
   setUp(() {
     contactsService = MockContactsService();
     conversationService = MockConversationService();
+    shareService = MockShareService();
     appDatabase = AppDatabase(NativeDatabase.memory());
   });
 
@@ -32,6 +37,7 @@ void main() {
     return ProviderContainer.test(overrides: [
       contactsServiceProvider.overrideWithValue(contactsService),
       conversationServiceProvider.overrideWithValue(conversationService),
+      shareServiceProvider.overrideWithValue(shareService),
       supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
       currentUserIdProvider.overrideWithValue('current-user-id'),
       appDatabaseProvider.overrideWithValue(appDatabase),
@@ -183,6 +189,21 @@ void main() {
                   that: containsAll(['u-1', 'u-2', 'current-user-id'])),
             )).called(1);
         expect(container.read(searchProvider).isGroupMode, false);
+      });
+    });
+
+    group('invite', () {
+      test('shares a sign-up link and flips to the invited state', () async {
+        when(() => shareService.shareText(any())).thenAnswer((_) async {});
+
+        final container = makeContainer();
+        await container.read(searchProvider.notifier).invite();
+
+        final shared = verify(() => shareService.shareText(captureAny()))
+            .captured
+            .single as String;
+        expect(shared, contains('roger'));
+        expect(container.read(searchProvider).notOnRogerInvited, true);
       });
     });
 
