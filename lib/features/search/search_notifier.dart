@@ -4,20 +4,26 @@ import '../../core/added_contacts_notifier.dart';
 import '../../core/providers.dart';
 import '../../core/services/contacts_service.dart';
 import '../../core/services/conversation_service.dart';
+import '../../core/services/share_service.dart';
 import 'search_state.dart';
 
 final searchProvider =
     NotifierProvider<SearchNotifier, SearchState>(SearchNotifier.new);
 
+// Placeholder sign-up link until roger is published / the domain is live.
+const _signupLink = 'https://rogermessaging.com';
+
 class SearchNotifier extends Notifier<SearchState> {
   late final ContactsService _contactsService;
   late final ConversationService _conversationService;
+  late final ShareService _shareService;
   late final String? _currentUserId;
 
   @override
   SearchState build() {
     _contactsService = ref.read(contactsServiceProvider);
     _conversationService = ref.read(conversationServiceProvider);
+    _shareService = ref.read(shareServiceProvider);
     _currentUserId = ref.read(currentUserIdProvider);
 
     // Re-load the added-contacts list whenever the store changes (e.g. a fresh
@@ -65,10 +71,14 @@ class SearchNotifier extends Notifier<SearchState> {
 
   /// Opens the OS contact picker for one contact, checks it against roger via
   /// `discover_user`, and — if matched — records it in AddedContacts (which
-  /// re-loads the list). A non-roger pick sets [SearchState.notOnRogerName]
-  /// (inviting them is a later slice). A cancelled pick is a no-op.
+  /// re-loads the list). A non-roger pick sets [SearchState.notOnRogerName]. A
+  /// cancelled pick is a no-op.
   Future<void> addSomeone() async {
-    state = state.copyWith(notOnRogerName: () => null, error: () => null);
+    state = state.copyWith(
+      notOnRogerName: () => null,
+      notOnRogerInvited: false,
+      error: () => null,
+    );
 
     final picked = await _contactsService.pickContact();
     if (!ref.mounted || picked == null) return;
@@ -93,6 +103,17 @@ class SearchNotifier extends Notifier<SearchState> {
       if (!ref.mounted) return;
       state = state.copyWith(error: () => e.toString());
     }
+  }
+
+  /// Invites the last picked non-roger contact by sharing a sign-up link via the
+  /// OS share sheet. Zero-chat: no conversation and no invite record is created
+  /// — it's a plain "get the app" link. (The invite-with-chat flow, which does
+  /// establish a conversation off a recorded video, lands with the Camera step.)
+  /// The share sheet can't confirm the send, so tapping is treated as sent.
+  Future<void> invite() async {
+    await _shareService.shareText('Join me on roger — get the app: $_signupLink');
+    if (!ref.mounted) return;
+    state = state.copyWith(notOnRogerInvited: true);
   }
 
   /// Open the existing 1:1 with this user, or create one if none exists.

@@ -197,6 +197,11 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
       _sortByMostRecent(summaries);
       if (!ref.mounted) return;
       state = state.copyWith(conversations: summaries, isLoading: false);
+      // Re-resolve names against the CURRENT added-contacts map. The map read at
+      // the top of this method can be empty if the drift store hadn't hydrated
+      // yet; the reactive listener fires before these summaries exist, so without
+      // this the "?" would stick even after the map hydrates.
+      reresolveNames(ref.read(addedContactsProvider));
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(isLoading: false, error: () => e.toString());
@@ -239,11 +244,15 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
                 addedNames: addedNames,
               ))
           .toList();
+      // Deleted members aren't in `members`; append their fixed label so the
+      // display name still accounts for them (matches loadConversations).
+      final deletedNames =
+          List.filled(summary.deletedMemberCount, 'Deleted user');
       return summary.copyWith(
         memberContactNames: names,
         displayName: resolveConversationName(
           conversationName: summary.conversation.name,
-          memberNames: names,
+          memberNames: [...names, ...deletedNames],
         ),
       );
     }).toList();

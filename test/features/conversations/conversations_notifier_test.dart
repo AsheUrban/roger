@@ -297,6 +297,32 @@ void main() {
         expect(updated.displayName, 'Trip crew'); // group name wins
         expect(updated.memberContactNames, ['Jordan']); // for avatar initials
       });
+
+      test('re-resolving keeps the "Deleted user" label in the display name',
+          () {
+        // A group with one resolvable member and one deleted member. Re-resolve
+        // must still account for the deleted slot (it isn't in `members`).
+        final seed = ConversationsState(
+          conversations: [
+            ConversationSummary(
+              conversation: _conv1,
+              displayName: '?, Deleted user',
+              members: [_userU1],
+              memberContactNames: const ['?'],
+              deletedMemberCount: 1,
+            ),
+          ],
+        );
+        final container = makeContainer(seed: seed);
+        container
+            .read(conversationsProvider.notifier)
+            .reresolveNames({'u1': 'Jordan'});
+
+        final updated =
+            container.read(conversationsProvider).conversations.first;
+        expect(updated.displayName, 'Jordan, Deleted user');
+        expect(updated.memberContactNames, ['Jordan']);
+      });
     });
   });
 }

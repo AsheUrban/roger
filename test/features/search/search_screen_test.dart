@@ -16,9 +16,16 @@ class _FakeSearchNotifier extends SearchNotifier {
   @override
   SearchState build() => _initialState;
 
+  int inviteCalls = 0;
+
   @override
   Future<void> addSomeone() async {
     addSomeoneCalls++;
+  }
+
+  @override
+  Future<void> invite() async {
+    inviteCalls++;
   }
 
   @override
@@ -170,6 +177,39 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(notifier.createGroupCalls, [null]);
+      });
+    });
+
+    group('invite', () {
+      testWidgets('a not-on-roger pick shows an Invite action', (tester) async {
+        await tester.pumpWidget(_buildWithFakeState(
+          state: const SearchState(notOnRogerName: 'Dana'),
+        ));
+
+        expect(find.byKey(const Key('invite-button')), findsOneWidget);
+      });
+
+      testWidgets('tapping Invite calls invite()', (tester) async {
+        final notifier =
+            _FakeSearchNotifier(const SearchState(notOnRogerName: 'Dana'));
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('invite-button')));
+        await tester.pumpAndSettle();
+
+        expect(notifier.inviteCalls, 1);
+      });
+
+      testWidgets('an invited pick shows "Invited" and no button',
+          (tester) async {
+        await tester.pumpWidget(_buildWithFakeState(
+          state: const SearchState(
+              notOnRogerName: 'Dana', notOnRogerInvited: true),
+        ));
+
+        expect(find.byKey(const Key('invite-button')), findsNothing);
+        expect(find.text('Invited'), findsOneWidget);
       });
     });
   });
