@@ -3,333 +3,154 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:roger/core/models/user.dart';
 import 'package:roger/core/providers.dart';
 import 'package:roger/core/services/auth_service.dart';
-import 'package:roger/core/services/contacts_service.dart';
-import 'package:roger/features/onboarding/onboarding_notifier.dart';
 import 'package:roger/features/onboarding/onboarding_screen.dart';
-import 'package:roger/features/onboarding/onboarding_state.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 class MockAuthService extends Mock implements AuthService {}
-class MockContactsService extends Mock implements ContactsService {}
+
 class MockRandom extends Mock implements Random {}
 
 void main() {
   late MockAuthService authService;
-  late MockContactsService contactsService;
   late MockRandom random;
 
   setUp(() {
     authService = MockAuthService();
-    contactsService = MockContactsService();
     random = MockRandom();
     when(() => random.nextInt(any())).thenReturn(2);
+    when(() => authService.currentSession).thenReturn(null);
+    when(() => authService.authEvents)
+        .thenAnswer((_) => Stream<AuthChangeEvent>.empty());
   });
 
   Widget buildTestWidget() {
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(path: '/', builder: (_, _) => const OnboardingScreen()),
+        GoRoute(path: '/search', builder: (_, _) => const SizedBox.shrink()),
+      ],
+    );
     return ProviderScope(
       overrides: [
         authServiceProvider.overrideWithValue(authService),
-        contactsServiceProvider.overrideWithValue(contactsService),
         randomProvider.overrideWithValue(random),
-        authStateChangesProvider.overrideWith(
-          (ref) => const Stream<AuthState>.empty(),
-        ),
       ],
-      child: const MaterialApp(
-        home: OnboardingScreen(),
-      ),
+      child: MaterialApp.router(routerConfig: router),
     );
   }
 
   group('OnboardingScreen', () {
-    group('emailEntry step', () {
-      testWidgets('renders roger wordmark, email field, and Continue button',
+    group('phoneEntry step', () {
+      testWidgets('renders roger wordmark, phone field, and Continue button',
           (tester) async {
         await tester.pumpWidget(buildTestWidget());
 
         expect(find.text('roger'), findsOneWidget);
-        expect(find.text('Email address'), findsOneWidget);
+        expect(find.text('Phone number'), findsOneWidget);
         expect(find.text('Continue'), findsOneWidget);
         expect(find.byIcon(Icons.arrow_back), findsNothing);
       });
 
-      testWidgets('tapping Continue with valid email calls sendMagicLink',
+      testWidgets('tapping Continue with valid phone calls sendOtp',
           (tester) async {
-        when(() => authService.sendMagicLink(any()))
-            .thenAnswer((_) async {});
+        when(() => authService.sendOtp(any())).thenAnswer((_) async {});
 
         await tester.pumpWidget(buildTestWidget());
-
-        await tester.enterText(
-          find.byType(TextField),
-          'ashe@example.com',
-        );
+        await tester.enterText(find.byType(TextField).last, '5550001000');
         await tester.tap(find.text('Continue'));
         await tester.pumpAndSettle();
 
-        verify(() => authService.sendMagicLink('ashe@example.com')).called(1);
+        verify(() => authService.sendOtp('+15550001000')).called(1);
       });
 
-      testWidgets('tapping Continue with invalid email shows error',
+      testWidgets('tapping Continue with empty phone shows error',
           (tester) async {
         await tester.pumpWidget(buildTestWidget());
 
-        await tester.enterText(find.byType(TextField), 'not-an-email');
         await tester.tap(find.text('Continue'));
         await tester.pumpAndSettle();
 
-        expect(find.textContaining('valid email'), findsOneWidget);
-        verifyNever(() => authService.sendMagicLink(any()));
+        expect(find.textContaining('cannot be empty'), findsOneWidget);
+        verifyNever(() => authService.sendOtp(any()));
       });
     });
 
-    group('awaitingEmail step', () {
-      testWidgets('renders check email message and resend button',
-          (tester) async {
-        when(() => authService.sendMagicLink(any()))
-            .thenAnswer((_) async {});
-
+    group('otpVerification step', () {
+      Future<void> advanceToOtp(WidgetTester tester) async {
+        when(() => authService.sendOtp(any())).thenAnswer((_) async {});
         await tester.pumpWidget(buildTestWidget());
-
-        // Advance to awaitingEmail
-        await tester.enterText(find.byType(TextField), 'ashe@example.com');
+        await tester.enterText(find.byType(TextField).last, '5550001000');
         await tester.tap(find.text('Continue'));
         await tester.pumpAndSettle();
+      }
 
-        expect(find.text('Check your email'), findsOneWidget);
-        expect(find.text('ashe@example.com'), findsOneWidget);
-        expect(find.text('Resend email'), findsOneWidget);
+      testWidgets('renders verification code field and Verify button',
+          (tester) async {
+        await advanceToOtp(tester);
+
+        expect(find.text('Enter verification code'), findsOneWidget);
+        expect(find.text('+15550001000'), findsOneWidget);
+        expect(find.text('Verify'), findsOneWidget);
+        expect(find.text('Resend code'), findsOneWidget);
         expect(find.byIcon(Icons.arrow_back), findsOneWidget);
       });
 
-      testWidgets('tapping back returns to emailEntry', (tester) async {
-        when(() => authService.sendMagicLink(any()))
-            .thenAnswer((_) async {});
+      testWidgets('tapping back returns to phoneEntry', (tester) async {
+        await advanceToOtp(tester);
 
-        await tester.pumpWidget(buildTestWidget());
-
-        // Advance to awaitingEmail
-        await tester.enterText(find.byType(TextField), 'ashe@example.com');
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-
-        // Tap back
         await tester.tap(find.byIcon(Icons.arrow_back));
         await tester.pumpAndSettle();
 
         expect(find.text('roger'), findsOneWidget);
-        expect(find.text('Email address'), findsOneWidget);
-      });
-
-      testWidgets('tapping Resend email calls sendMagicLink again',
-          (tester) async {
-        when(() => authService.sendMagicLink(any()))
-            .thenAnswer((_) async {});
-
-        await tester.pumpWidget(buildTestWidget());
-
-        // Advance to awaitingEmail
-        await tester.enterText(find.byType(TextField), 'ashe@example.com');
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-
-        // Reset and tap resend
-        reset(authService);
-        when(() => authService.sendMagicLink(any()))
-            .thenAnswer((_) async {});
-
-        await tester.tap(find.text('Resend email'));
-        await tester.pumpAndSettle();
-
-        verify(() => authService.sendMagicLink('ashe@example.com')).called(1);
-      });
-    });
-
-    group('phoneNumber step', () {
-      Future<void> advanceToPhone(WidgetTester tester) async {
-        when(() => authService.sendMagicLink(any()))
-            .thenAnswer((_) async {});
-        when(() => authService.getCurrentUser())
-            .thenAnswer((_) async => null);
-
-        await tester.pumpWidget(buildTestWidget());
-
-        // email → awaitingEmail
-        await tester.enterText(find.byType(TextField), 'ashe@example.com');
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-
-        // Simulate magic link auth callback
-        final container = ProviderScope.containerOf(
-          tester.element(find.byType(OnboardingScreen)),
-        );
-        await container.read(onboardingProvider.notifier).onAuthStateChanged();
-        await tester.pumpAndSettle();
-      }
-
-      testWidgets('renders phone number field', (tester) async {
-        await advanceToPhone(tester);
-
-        expect(find.text('Your phone number'), findsOneWidget);
         expect(find.text('Phone number'), findsOneWidget);
-        expect(find.byIcon(Icons.arrow_back), findsOneWidget);
       });
 
-      testWidgets('tapping back signs out and returns to emailEntry',
+      testWidgets('tapping Verify with valid code calls verifyOtp',
           (tester) async {
-        when(() => authService.signOut()).thenAnswer((_) async {});
+        await advanceToOtp(tester);
 
-        await advanceToPhone(tester);
-        await tester.tap(find.byIcon(Icons.arrow_back));
+        when(() => authService.verifyOtp(
+              phoneNumber: any(named: 'phoneNumber'),
+              otpCode: any(named: 'otpCode'),
+            )).thenAnswer((_) async => AuthResponse(session: null, user: null));
+        when(() => authService.getCurrentUser()).thenAnswer((_) async => null);
+        when(() => authService.createAccount(
+              avatarColor: any(named: 'avatarColor'),
+            )).thenAnswer((_) async => User(
+              id: 'new-id',
+              avatarColor: 'Deep Ember',
+              createdAt: DateTime.now(),
+            ));
+
+        await tester.enterText(find.byType(TextField), '123456');
+        await tester.tap(find.text('Verify'));
         await tester.pumpAndSettle();
 
-        verify(() => authService.signOut()).called(1);
-        expect(find.text('roger'), findsOneWidget);
+        verify(() => authService.verifyOtp(
+              phoneNumber: '+15550001000',
+              otpCode: '123456',
+            )).called(1);
       });
 
-      testWidgets('tapping Continue with valid number advances',
-          (tester) async {
-        when(() => authService.isPhoneNumberTaken(any()))
-            .thenAnswer((_) async => false);
+      testWidgets('invalid OTP shows error', (tester) async {
+        await advanceToOtp(tester);
 
-        await advanceToPhone(tester);
+        when(() => authService.verifyOtp(
+              phoneNumber: any(named: 'phoneNumber'),
+              otpCode: any(named: 'otpCode'),
+            )).thenThrow(Exception('Invalid OTP'));
 
-        await tester.enterText(find.byType(TextField), '+15551234567');
-        await tester.tap(find.text('Continue'));
+        await tester.enterText(find.byType(TextField), '000000');
+        await tester.tap(find.text('Verify'));
         await tester.pumpAndSettle();
 
-        expect(find.text('What should people\ncall you?'), findsOneWidget);
-      });
-
-      testWidgets('empty phone number shows error', (tester) async {
-        await advanceToPhone(tester);
-
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-
-        expect(find.textContaining('cannot be empty'), findsOneWidget);
-      });
-    });
-
-    group('displayName step', () {
-      Future<void> advanceToDisplayName(WidgetTester tester) async {
-        when(() => authService.sendMagicLink(any()))
-            .thenAnswer((_) async {});
-        when(() => authService.getCurrentUser())
-            .thenAnswer((_) async => null);
-        when(() => authService.isPhoneNumberTaken(any()))
-            .thenAnswer((_) async => false);
-
-        await tester.pumpWidget(buildTestWidget());
-
-        // email → awaitingEmail
-        await tester.enterText(find.byType(TextField), 'ashe@example.com');
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-
-        // Simulate auth callback
-        final container = ProviderScope.containerOf(
-          tester.element(find.byType(OnboardingScreen)),
-        );
-        await container.read(onboardingProvider.notifier).onAuthStateChanged();
-        await tester.pumpAndSettle();
-
-        // phone → displayName
-        await tester.enterText(find.byType(TextField), '+15551234567');
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-      }
-
-      testWidgets('renders display name field', (tester) async {
-        await advanceToDisplayName(tester);
-
-        expect(find.text('What should people\ncall you?'), findsOneWidget);
-        expect(find.text('Display name'), findsOneWidget);
-      });
-
-      testWidgets('tapping Continue with valid name advances',
-          (tester) async {
-        await advanceToDisplayName(tester);
-
-        await tester.enterText(find.byType(TextField), 'Ashe');
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-
-        expect(find.text('Find your people'), findsOneWidget);
-      });
-
-      testWidgets('empty name shows error', (tester) async {
-        await advanceToDisplayName(tester);
-
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-
-        expect(find.textContaining('cannot be empty'), findsOneWidget);
-      });
-
-      testWidgets('tapping back returns to phone number', (tester) async {
-        await advanceToDisplayName(tester);
-
-        await tester.tap(find.byIcon(Icons.arrow_back));
-        await tester.pumpAndSettle();
-
-        expect(find.text('Your phone number'), findsOneWidget);
-      });
-    });
-
-    group('contactsPermission step', () {
-      Future<void> advanceToContacts(WidgetTester tester) async {
-        when(() => authService.sendMagicLink(any()))
-            .thenAnswer((_) async {});
-        when(() => authService.getCurrentUser())
-            .thenAnswer((_) async => null);
-        when(() => authService.isPhoneNumberTaken(any()))
-            .thenAnswer((_) async => false);
-
-        await tester.pumpWidget(buildTestWidget());
-
-        // email → awaitingEmail
-        await tester.enterText(find.byType(TextField), 'ashe@example.com');
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-
-        // Simulate auth callback
-        final container = ProviderScope.containerOf(
-          tester.element(find.byType(OnboardingScreen)),
-        );
-        await container.read(onboardingProvider.notifier).onAuthStateChanged();
-        await tester.pumpAndSettle();
-
-        // phone → displayName
-        await tester.enterText(find.byType(TextField), '+15551234567');
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-
-        // displayName → contacts
-        await tester.enterText(find.byType(TextField), 'Ashe');
-        await tester.tap(find.text('Continue'));
-        await tester.pumpAndSettle();
-      }
-
-      testWidgets('renders Allow contacts and Not now buttons',
-          (tester) async {
-        await advanceToContacts(tester);
-
-        expect(find.text('Find your people'), findsOneWidget);
-        expect(find.text('Allow contacts'), findsOneWidget);
-        expect(find.text('Not now'), findsOneWidget);
-      });
-
-      testWidgets('tapping back returns to display name', (tester) async {
-        await advanceToContacts(tester);
-
-        await tester.tap(find.byIcon(Icons.arrow_back));
-        await tester.pumpAndSettle();
-
-        expect(find.text('What should people\ncall you?'), findsOneWidget);
+        expect(find.textContaining('Invalid or expired'), findsOneWidget);
       });
     });
   });

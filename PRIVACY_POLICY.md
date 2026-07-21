@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **roger**
-Last updated: April 2026
+Last updated: June 2026
 
 ---
 
@@ -17,7 +17,7 @@ This policy explains what information we do collect, why, and how it is handled.
 
 ### Information You Provide
 
-**Account information.** When you create an account, we collect your email address, phone number, and display name. Your email address is used for authentication and account recovery — it is never displayed to other users or used for marketing. Your phone number is how people in your contacts find you on roger. Your display name is stored in your profile and visible only to you on your Settings screen — other users see you by whatever name they have you saved as in their own device contacts.
+**Account information.** When you create an account, we collect your phone number. It is used as your login credential and is how someone can find you on roger when they add your contact. Your number is kept by our sign-in system solely to log you in; in the rest of our database we store only a secured one-way hash of it (used for contact discovery) — never the number itself. To confirm your number when you sign in, we send a one-time code to it by text message; delivering that text means sharing your number with a third-party SMS provider, which uses it only to send the code. You may optionally add a recovery email address in Settings — this is used only for account recovery if you lose access to your phone number. It is never displayed to other users or used for marketing. Other users see you by whatever name they saved you under when they added you.
 
 **Messages.** Videos, photos, notes, and live call recordings are encrypted on your device before transmission. We store and deliver encrypted ciphertext only. We cannot decrypt or access your message content at any point.
 
@@ -31,7 +31,11 @@ This policy explains what information we do collect, why, and how it is handled.
 
 ### Contact Discovery
 
-When you grant contacts permission, roger hashes your contacts' phone numbers on your device using a one-way cryptographic function. Only the hashed values are sent to our server to check which of your contacts are on roger. Raw phone numbers never leave your device. We do not store your contact list.
+roger never receives your address book. There is no bulk contacts permission, and your contact list — even a hashed copy of it — is never uploaded.
+
+To add someone, you pick one contact at a time through your phone's built-in contact picker, which does not require giving roger access to your contacts. Only that single number is sent to us, over an encrypted connection, where it is combined with a secret value, hashed, checked for a match against existing accounts, and then discarded. We do not store, log, or back up the number. This lookup is rate-limited so it cannot be used to find users in bulk.
+
+The names shown for the people you add are captured from the contacts you pick and stored only on your device, in encrypted local storage. They are never sent to us.
 
 ---
 
@@ -39,12 +43,11 @@ When you grant contacts permission, roger hashes your contacts' phone numbers on
 
 | Data | Purpose |
 |---|---|
-| Email address | Authentication and account recovery |
-| Phone number | Contact discovery |
-| Display name | Stored in your profile for your own Settings screen — not shown to other users |
+| Phone number | Authentication and contact discovery |
+| Recovery email (optional) | Account recovery |
 | Encrypted message content | Delivery to recipients via Cloudflare R2 |
 | Device tokens | Push notification delivery |
-| Hashed contact numbers | Contact discovery — checked against registered users, not stored |
+| A contact you pick for discovery | Sent to our server, hashed with a secret, matched against existing accounts, then discarded — never stored |
 
 We do not use your information for advertising. We do not sell your data. We do not share your information with third parties except as described in this policy.
 
@@ -84,6 +87,7 @@ roger uses the following third-party infrastructure:
 | Picovoice | On-device speech recognition | picovoice.ai/privacy |
 | Apple APNs | iOS push notifications | apple.com/legal/privacy |
 | Google FCM | Android push notifications | policies.google.com/privacy |
+| SMS provider | Phone verification code delivery (provider not yet finalized) | — |
 
 ---
 
@@ -91,8 +95,8 @@ roger uses the following third-party infrastructure:
 
 We do not sell, rent, or trade your personal information. We may share information only in the following circumstances:
 
-- **Legal compliance.** If required by law or valid legal process. Because we cannot decrypt your messages, any such request would be limited to account metadata (email address, phone number, display name, account creation date).
-- **Safety.** If we have a good-faith belief that disclosure is necessary to prevent imminent physical harm to a specific person — for example, a credible and specific threat of violence. Any disclosure in this circumstance would be limited to account metadata (email address, phone number, display name, account creation date). We cannot provide message content because we cannot decrypt it.
+- **Legal compliance.** If required by law or valid legal process. Because we cannot decrypt your messages, any such request would be limited to account metadata (phone number, recovery email if set, account creation date).
+- **Safety.** If we have a good-faith belief that disclosure is necessary to prevent imminent physical harm to a specific person — for example, a credible and specific threat of violence. Any disclosure in this circumstance would be limited to account metadata (phone number, recovery email if set, account creation date). We cannot provide message content because we cannot decrypt it.
 - **Business transfer.** In the event of a merger or acquisition, your information would transfer subject to the same commitments in this policy.
 
 ---

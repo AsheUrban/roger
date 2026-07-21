@@ -10,7 +10,6 @@ class SettingsNotifier extends Notifier<SettingsState> {
   SettingsState build() => const SettingsState();
 
   Future<void> loadSettings() async {}
-  Future<void> updateDisplayName(String name) async {}
   Future<void> updatePhoneNumber(String newNumber) async {}
   Future<void> updateAvatarColor(String color) async {}
   Future<void> updateMessageLimit(int limit) async {}

@@ -1,63 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
+import 'core/auth_notifier.dart';
+import 'core/auth_state.dart';
 import 'core/config/env.dart';
+import 'core/database/app_database.dart';
 import 'core/providers.dart';
+import 'core/services/database_key_service.dart';
+import 'core/theme/colors.dart';
 import 'features/conversations/conversations_screen.dart';
 import 'features/search/search_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/camera/camera_screen.dart';
 
-/// Redirect logic extracted for testability.
-/// [session] is the current auth session (null if not authenticated).
-/// [hasUsersRow] is a function that checks if the public.users row exists.
-/// Returns the path to redirect to, or null to stay on current path.
-Future<String?> routerRedirect({
-  required Session? session,
-  required Future<bool> Function(String userId) hasUsersRow,
+/// Synchronous router redirect — reads the cached `AuthState` instead of
+/// querying `public.users` on every navigation. See `LOG_5_29.md`.
+///
+/// Pure function: exhaustive switch over `AuthState`; idempotent on its own
+/// target (the redirect won't loop). Re-evaluated whenever the
+/// `refreshListenable` bridge in `routerProvider` fires.
+String? routerRedirect({
+  required AuthState authState,
   required String path,
-}) async {
+}) {
   final isOnboarding = path == '/onboarding';
-
-  // Not authenticated → must onboard
-  if (session == null) {
-    return isOnboarding ? null : '/onboarding';
-  }
-
-  // Authenticated — check if account creation completed
-  final exists = await hasUsersRow(session.user.id);
-
-  if (!exists) {
-    // Magic link verified but account creation never finished
-    return isOnboarding ? null : '/onboarding';
-  }
-
-  // Fully onboarded — don't let them back to onboarding
-  if (isOnboarding) {
-    return '/conversations';
-  }
-
-  return null;
+  return switch (authState) {
+    AuthStateNeedsOnboarding() => isOnboarding ? null : '/onboarding',
+    AuthStateOnboarded() => isOnboarding ? '/conversations' : null,
+  };
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final client = ref.read(supabaseClientProvider);
+  // `ValueNotifier` bridge poked by `ref.listen(authProvider, ...)`. Passed to
+  // `GoRouter` as `refreshListenable` so the redirect re-runs whenever
+  // `AuthState` changes (seed → async correction, signedOut, markOnboarded).
+  // Closure-local — never exposed as provider state — so no `Raw<…>` needed.
+  final bridge = ValueNotifier<int>(0);
+  ref.listen<AuthState>(authProvider, (_, _) {
+    bridge.value++;
+  });
+  ref.onDispose(bridge.dispose);
 
   return GoRouter(
     initialLocation: '/conversations',
+    refreshListenable: bridge,
     redirect: (context, state) => routerRedirect(
-      session: client.auth.currentSession,
-      hasUsersRow: (userId) async {
-        final row = await client
-            .from('users')
-            .select('id')
-            .eq('id', userId)
-            .maybeSingle();
-        return row != null;
-      },
+      authState: ref.read(authProvider),
       path: state.uri.path,
     ),
     routes: [
@@ -98,19 +89,29 @@ Future<void> main() async {
   await Supabase.initialize(
     url: Env.supabaseUrl,
     anonKey: Env.supabaseAnonKey,
-    authOptions: const FlutterAuthClientOptions(
-      authFlowType: AuthFlowType.pkce,
-    ),
   );
 
-  runApp(const ProviderScope(child: RogerApp()));
+  final dbKey = await DatabaseKeyService().getOrCreateKey();
+  final db = await openAppDatabase(dbKey);
+
+  runApp(ProviderScope(
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+    ],
+    child: const RogerApp(),
+  ));
 }
 
-class RogerApp extends ConsumerWidget {
+class RogerApp extends ConsumerStatefulWidget {
   const RogerApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RogerApp> createState() => _RogerAppState();
+}
+
+class _RogerAppState extends ConsumerState<RogerApp> {
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
@@ -136,6 +137,7 @@ class _RogerShell extends StatelessWidget {
     };
 
     return Scaffold(
+      backgroundColor: charcoal,
       body: child,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: index,
@@ -148,6 +150,14 @@ class _RogerShell extends StatelessWidget {
           };
           context.go(path);
         },
+        // Spec §4: warm white for active nav state. Labels never shown.
+        backgroundColor: charcoal,
+        type: BottomNavigationBarType.fixed,
+        elevation: 0,
+        selectedItemColor: warmWhite,
+        unselectedItemColor: warmWhite.withValues(alpha: 0.4),
+        showSelectedLabels: false,
+        showUnselectedLabels: false,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.chat_bubble_outline),

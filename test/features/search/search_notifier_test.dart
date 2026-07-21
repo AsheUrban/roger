@@ -1,341 +1,195 @@
-import 'dart:async';
-
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:roger/core/models/user.dart';
+import 'package:roger/core/database/app_database.dart';
 import 'package:roger/core/providers.dart';
 import 'package:roger/core/services/contacts_service.dart';
+import 'package:roger/core/services/conversation_service.dart';
 import 'package:roger/features/search/search_notifier.dart';
-import 'package:roger/features/search/search_state.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MockContactsService extends Mock implements ContactsService {}
+
+class MockConversationService extends Mock implements ConversationService {}
+
 class MockSupabaseClient extends Mock implements SupabaseClient {}
-
-final _testUser1 = User(
-  id: 'user-1',
-  email: 'jordan@example.com',
-  phoneNumber: '+15551111111',
-  displayName: 'Jordan B',
-  avatarColor: 'Rust',
-  createdAt: DateTime(2026, 1, 1),
-);
-
-final _testUser2 = User(
-  id: 'user-2',
-  email: 'casey@example.com',
-  phoneNumber: '+15552222222',
-  displayName: 'Casey L',
-  avatarColor: 'Cornflower',
-  createdAt: DateTime(2026, 1, 1),
-);
 
 void main() {
   late MockContactsService contactsService;
-  late ProviderContainer container;
-  late SearchNotifier notifier;
+  late MockConversationService conversationService;
+  late AppDatabase appDatabase;
 
   setUp(() {
     contactsService = MockContactsService();
+    conversationService = MockConversationService();
+    appDatabase = AppDatabase(NativeDatabase.memory());
+  });
 
-    // Default: no permission, empty caches
-    when(() => contactsService.hasPermission())
-        .thenAnswer((_) async => false);
-    when(() => contactsService.cachedContacts).thenReturn([]);
-    when(() => contactsService.cachedRogerUsers).thenReturn([]);
+  tearDown(() async => appDatabase.close());
 
-    container = ProviderContainer(overrides: [
+  ProviderContainer makeContainer() {
+    return ProviderContainer.test(overrides: [
       contactsServiceProvider.overrideWithValue(contactsService),
+      conversationServiceProvider.overrideWithValue(conversationService),
       supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
       currentUserIdProvider.overrideWithValue('current-user-id'),
-      authStateChangesProvider.overrideWith(
-        (ref) => const Stream<AuthState>.empty(),
-      ),
+      appDatabaseProvider.overrideWithValue(appDatabase),
     ]);
-
-    notifier = container.read(searchProvider.notifier);
-  });
-
-  tearDown(() {
-    container.dispose();
-  });
+  }
 
   group('SearchNotifier', () {
     group('initial state', () {
-      test('starts with empty results and no permission', () {
+      test('starts empty', () {
+        final container = makeContainer();
         final state = container.read(searchProvider);
         expect(state.results, isEmpty);
-        expect(state.hasContactsPermission, false);
         expect(state.query, '');
-        expect(state.isLoading, false);
-        expect(state.error, isNull);
+        expect(state.isGroupMode, false);
       });
     });
 
-    group('contact loading', () {
-      test('loadInitialContacts runs refreshBatchCheck and populates results',
+    group('addSomeone', () {
+      test('a picked contact on roger is added and appears in the list',
           () async {
-        when(() => contactsService.refreshBatchCheck())
-            .thenAnswer((_) async {});
-        when(() => contactsService.cachedContacts).thenReturn([
-          (name: 'Jordan B', phoneNumber: '+15551111111'),
-          (name: 'Dana R', phoneNumber: '+15553333333'),
-        ]);
-        when(() => contactsService.cachedRogerUsers)
-            .thenReturn([_testUser1]);
+        when(() => contactsService.pickContact()).thenAnswer(
+            (_) async => (name: 'Jordan', phoneNumber: '+15551111111'));
+        when(() => contactsService.discover('+15551111111')).thenAnswer(
+            (_) async => const DiscoveredUser(
+                userId: 'u-1', avatarColor: 'Rust'));
 
-        await notifier.loadInitialContacts();
-
-        verify(() => contactsService.refreshBatchCheck()).called(1);
-        final state = container.read(searchProvider);
-        expect(state.results.length, 2);
-        expect(state.isLoading, false);
-      });
-
-      test('results sorted alphabetically by contact name', () async {
-        when(() => contactsService.refreshBatchCheck())
-            .thenAnswer((_) async {});
-        when(() => contactsService.cachedContacts).thenReturn([
-          (name: 'Zara', phoneNumber: '+15559999999'),
-          (name: 'Alice', phoneNumber: '+15558888888'),
-          (name: 'Morgan', phoneNumber: '+15557777777'),
-        ]);
-        when(() => contactsService.cachedRogerUsers).thenReturn([]);
-
-        await notifier.loadInitialContacts();
-
-        final state = container.read(searchProvider);
-        final names = state.results.map((r) => r.contactName).toList();
-        expect(names, ['Alice', 'Morgan', 'Zara']);
-      });
-
-      test('roger users show isOnRoger true', () async {
-        when(() => contactsService.refreshBatchCheck())
-            .thenAnswer((_) async {});
-        when(() => contactsService.cachedContacts).thenReturn([
-          (name: 'Jordan B', phoneNumber: '+15551111111'),
-        ]);
-        when(() => contactsService.cachedRogerUsers)
-            .thenReturn([_testUser1]);
-
-        await notifier.loadInitialContacts();
-
-        final state = container.read(searchProvider);
-        final jordan = state.results.first;
-        expect(jordan.isOnRoger, true);
-        expect(jordan.rogerUser, isNotNull);
-        expect(jordan.rogerUser!.id, 'user-1');
-      });
-
-      test('non-roger contacts show isOnRoger false', () async {
-        when(() => contactsService.refreshBatchCheck())
-            .thenAnswer((_) async {});
-        when(() => contactsService.cachedContacts).thenReturn([
-          (name: 'Dana R', phoneNumber: '+15553333333'),
-        ]);
-        when(() => contactsService.cachedRogerUsers).thenReturn([]);
-
-        await notifier.loadInitialContacts();
-
-        final state = container.read(searchProvider);
-        final dana = state.results.first;
-        expect(dana.isOnRoger, false);
-        expect(dana.rogerUser, isNull);
-      });
-
-      test('current user is excluded from results', () async {
-        final currentUser = User(
-          id: 'current-user-id',
-          email: 'me@example.com',
-          phoneNumber: '+15550000000',
-          displayName: 'Me',
-          avatarColor: 'Charcoal',
-          createdAt: DateTime(2026, 1, 1),
-        );
-
-        when(() => contactsService.refreshBatchCheck())
-            .thenAnswer((_) async {});
-        when(() => contactsService.cachedContacts).thenReturn([
-          (name: 'Me', phoneNumber: '+15550000000'),
-          (name: 'Jordan B', phoneNumber: '+15551111111'),
-        ]);
-        when(() => contactsService.cachedRogerUsers)
-            .thenReturn([currentUser, _testUser1]);
-
-        await notifier.loadInitialContacts();
+        final container = makeContainer();
+        await container.read(searchProvider.notifier).addSomeone();
+        // let the addedContactsProvider listener re-load the list
+        await Future<void>.delayed(Duration.zero);
 
         final state = container.read(searchProvider);
         expect(state.results.length, 1);
-        expect(state.results.first.contactName, 'Jordan B');
+        expect(state.results.first.userId, 'u-1');
+        expect(state.results.first.contactName, 'Jordan');
+        expect(state.results.first.avatarColor, 'Rust');
+        expect(state.notOnRogerName, isNull);
       });
 
-      test('error on load sets error state', () async {
-        when(() => contactsService.refreshBatchCheck())
-            .thenThrow(Exception('Network error'));
-        when(() => contactsService.cachedContacts).thenReturn([]);
-        when(() => contactsService.cachedRogerUsers).thenReturn([]);
+      test('a picked contact not on roger sets notOnRogerName, no add',
+          () async {
+        when(() => contactsService.pickContact()).thenAnswer(
+            (_) async => (name: 'Dana', phoneNumber: '+15553333333'));
+        when(() => contactsService.discover('+15553333333'))
+            .thenAnswer((_) async => null);
 
-        await notifier.loadInitialContacts();
+        final container = makeContainer();
+        await container.read(searchProvider.notifier).addSomeone();
+        await Future<void>.delayed(Duration.zero);
 
         final state = container.read(searchProvider);
-        expect(state.error, isNotNull);
-        expect(state.isLoading, false);
+        expect(state.notOnRogerName, 'Dana');
+        expect(state.results, isEmpty);
+      });
+
+      test('a cancelled pick is a no-op', () async {
+        when(() => contactsService.pickContact())
+            .thenAnswer((_) async => null);
+
+        final container = makeContainer();
+        await container.read(searchProvider.notifier).addSomeone();
+
+        final state = container.read(searchProvider);
+        expect(state.results, isEmpty);
+        expect(state.notOnRogerName, isNull);
+        verifyNever(() => contactsService.discover(any()));
       });
     });
 
     group('search', () {
-      setUp(() async {
-        when(() => contactsService.refreshBatchCheck())
-            .thenAnswer((_) async {});
-        when(() => contactsService.cachedContacts).thenReturn([
-          (name: 'Jordan B', phoneNumber: '+15551111111'),
-          (name: 'Casey L', phoneNumber: '+15552222222'),
-          (name: 'Dana R', phoneNumber: '+15553333333'),
-        ]);
-        when(() => contactsService.cachedRogerUsers)
-            .thenReturn([_testUser1, _testUser2]);
-        when(() => contactsService.onDemandSearch(any()))
-            .thenAnswer((_) async => null);
+      Future<ProviderContainer> withTwoContacts() async {
+        final container = makeContainer();
+        await appDatabase.addedContactsDao.upsertAddedContact(
+            userId: 'u-1', contactName: 'Jordan', avatarColor: 'Rust');
+        await appDatabase.addedContactsDao.upsertAddedContact(
+            userId: 'u-2', contactName: 'Casey', avatarColor: 'Olive');
+        await container.read(searchProvider.notifier).search('');
+        return container;
+      }
 
-        await notifier.loadInitialContacts();
+      test('lists added contacts sorted by name', () async {
+        final container = await withTwoContacts();
+        final names =
+            container.read(searchProvider).results.map((r) => r.contactName);
+        expect(names, ['Casey', 'Jordan']);
       });
 
-      test('filters results by name, case-insensitive', () async {
-        await notifier.search('jordan');
-
+      test('filters by name, case-insensitive', () async {
+        final container = await withTwoContacts();
+        await container.read(searchProvider.notifier).search('jor');
         final state = container.read(searchProvider);
         expect(state.results.length, 1);
-        expect(state.results.first.contactName, 'Jordan B');
+        expect(state.results.first.contactName, 'Jordan');
+        expect(state.query, 'jor');
       });
 
-      test('empty query returns all results', () async {
-        await notifier.search('jordan');
-        await notifier.search('');
-
-        final state = container.read(searchProvider);
-        expect(state.results.length, 3);
-      });
-
-      test('zero results returns empty list with no error', () async {
-        await notifier.search('zzzzzzz');
-
+      test('zero matches returns empty, no error', () async {
+        final container = await withTwoContacts();
+        await container.read(searchProvider.notifier).search('zzzz');
         final state = container.read(searchProvider);
         expect(state.results, isEmpty);
         expect(state.error, isNull);
-      });
-
-      test('search query with special characters handled gracefully',
-          () async {
-        await notifier.search('🎉!@#\$%');
-
-        final state = container.read(searchProvider);
-        expect(state.results, isEmpty);
-        expect(state.error, isNull);
-      });
-
-      test('updates query in state', () async {
-        await notifier.search('cas');
-
-        final state = container.read(searchProvider);
-        expect(state.query, 'cas');
-      });
-
-      test('does not match by roger display name — contact name only',
-          () async {
-        // Contact saved as 'J-Dog', but their roger displayName is 'Jordan B'.
-        // April 7 decision: filter matches contact name only, not server display name.
-        when(() => contactsService.cachedContacts).thenReturn([
-          (name: 'J-Dog', phoneNumber: '+15551111111'),
-        ]);
-        when(() => contactsService.cachedRogerUsers).thenReturn([_testUser1]);
-        await notifier.loadInitialContacts();
-
-        // Searching by roger displayName should return nothing
-        await notifier.search('Jordan');
-        expect(container.read(searchProvider).results, isEmpty,
-            reason: 'Filter must match contact name only, not server display name');
-
-        // Searching by contact name should return the result
-        await notifier.search('J-Dog');
-        final state = container.read(searchProvider);
-        expect(state.results.length, 1);
-        expect(state.results.first.contactName, 'J-Dog');
       });
     });
 
-    group('contacts permission', () {
-      test('granted: loads contacts and sets hasContactsPermission', () async {
-        when(() => contactsService.requestPermission())
-            .thenAnswer((_) async => true);
-        when(() => contactsService.refreshBatchCheck())
-            .thenAnswer((_) async {});
-        when(() => contactsService.cachedContacts).thenReturn([]);
-        when(() => contactsService.cachedRogerUsers).thenReturn([]);
+    group('group mode', () {
+      test('enter / toggle / cap at 4 / exit', () async {
+        final container = makeContainer();
+        final notifier = container.read(searchProvider.notifier);
 
-        await notifier.requestContactsPermission();
+        notifier.enterGroupMode();
+        expect(container.read(searchProvider).isGroupMode, true);
 
-        verify(() => contactsService.refreshBatchCheck()).called(1);
-        final state = container.read(searchProvider);
-        expect(state.hasContactsPermission, true);
+        for (var i = 0; i < 5; i++) {
+          notifier.toggleContactSelection('user-$i');
+        }
+        expect(container.read(searchProvider).selectedUserIds.length, 4);
+
+        notifier.toggleContactSelection('user-0'); // deselect
+        expect(container.read(searchProvider).selectedUserIds,
+            isNot(contains('user-0')));
+
+        notifier.exitGroupMode();
+        expect(container.read(searchProvider).isGroupMode, false);
+        expect(container.read(searchProvider).selectedUserIds, isEmpty);
       });
 
-      test('denied: stays on empty state, no crash', () async {
-        when(() => contactsService.requestPermission())
-            .thenAnswer((_) async => false);
+      test('createGroupConversation calls the service with members + self',
+          () async {
+        final container = makeContainer();
+        final notifier = container.read(searchProvider.notifier);
+        notifier.enterGroupMode();
+        notifier.toggleContactSelection('u-1');
+        notifier.toggleContactSelection('u-2');
 
-        await notifier.requestContactsPermission();
+        when(() => conversationService.createConversation(
+              name: any(named: 'name'),
+              memberIds: any(named: 'memberIds'),
+            )).thenAnswer((_) async => 'new-conv-id');
 
-        verifyNever(() => contactsService.refreshBatchCheck());
-        final state = container.read(searchProvider);
-        expect(state.hasContactsPermission, false);
-      });
+        final convId =
+            await notifier.createGroupConversation(name: 'Game Night');
 
-      test('without permission hasContactsPermission is false', () {
-        final state = container.read(searchProvider);
-        expect(state.hasContactsPermission, false);
+        expect(convId, 'new-conv-id');
+        verify(() => conversationService.createConversation(
+              name: 'Game Night',
+              memberIds: any(
+                  named: 'memberIds',
+                  that: containsAll(['u-1', 'u-2', 'current-user-id'])),
+            )).called(1);
+        expect(container.read(searchProvider).isGroupMode, false);
       });
     });
 
     group('startChat', () {
-      test('opens existing conversation if 1:1 already exists',
-          skip: true, () {});
-
-      test('creates new conversation if none exists',
-          skip: true, () {});
-
-      test('never creates duplicate conversation',
-          skip: true, () {});
-    });
-
-    group('sendInvite', () {
-      test('creates pending invite with 7-day expiry',
-          skip: true, () {});
-
-      test('marks contact as having pending invite in state',
-          skip: true, () {});
-
-      test('only available for contacts NOT on roger', () async {
-        when(() => contactsService.refreshBatchCheck())
-            .thenAnswer((_) async {});
-        when(() => contactsService.cachedContacts).thenReturn([
-          (name: 'Jordan B', phoneNumber: '+15551111111'),
-          (name: 'Dana R', phoneNumber: '+15553333333'),
-        ]);
-        when(() => contactsService.cachedRogerUsers)
-            .thenReturn([_testUser1]);
-
-        await notifier.loadInitialContacts();
-
-        final state = container.read(searchProvider);
-        final jordan =
-            state.results.firstWhere((r) => r.contactName == 'Jordan B');
-        final dana =
-            state.results.firstWhere((r) => r.contactName == 'Dana R');
-
-        expect(jordan.isOnRoger, true);
-        expect(dana.isOnRoger, false);
-      });
+      test('delegates to findOrCreate1to1',
+          skip: 'Integration test — findOrCreate1to1 hits real Supabase',
+          () {});
     });
   });
 }

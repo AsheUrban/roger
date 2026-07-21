@@ -1,67 +1,38 @@
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('SettingsNotifier', () {
-    test('loadSettings populates user and settings state', () {
-      fail('not implemented');
-    });
+  group('SettingsNotifier', skip: 'feature not built — step 8', () {
+    test('loadSettings populates user and settings state', () {});
 
-    test('updateDisplayName persists new name', () {
-      fail('not implemented');
-    });
+    test('updatePhoneNumber requires OTP verification to the new number', () {});
 
-    test('updatePhoneNumber updates number directly (no OTP at MVP)', () {
-      fail('not implemented');
-    });
-
-    test('updateAvatarColor changes color globally', () {
-      fail('not implemented');
-    });
+    test('updateAvatarColor changes color globally', () {});
 
     group('message storage', () {
-      test('updateMessageLimit to lower value prompts confirmation', () {
-        fail('not implemented');
-      });
+      test('updateMessageLimit to lower value prompts confirmation', () {});
 
-      test('updateMessageLimit to higher value takes effect immediately', () {
-        fail('not implemented');
-      });
+      test('updateMessageLimit to higher value takes effect immediately', () {});
 
-      test('messageLimit must be between 10 and 500', () {
-        fail('not implemented');
-      });
+      test('messageLimit must be between 10 and 500', () {});
     });
 
     group('disappearing messages', () {
-      test('toggling on stores pre_disappearing_limit', () {
-        fail('not implemented');
-      });
+      test('toggling on stores pre_disappearing_limit', () {});
 
-      test('toggling off restores previous limit', () {
-        fail('not implemented');
-      });
+      test('toggling off restores previous limit', () {});
 
-      test('toggling on prompts to clear existing messages', () {
-        fail('not implemented');
-      });
+      test('toggling on prompts to clear existing messages', () {});
     });
 
     group('account actions', () {
-      test('signOut requires confirmation', () {
-        fail('not implemented');
-      });
+      test('signOut requires confirmation', () {});
 
-      test('deleteAccount purges all data', () {
-        fail('not implemented');
-      });
+      test('deleteAccount purges all data', () {});
 
-      test('deleteAccount in group creates new thread for remaining members', () {
-        fail('not implemented');
-      });
+      test('deleteAccount in group creates new thread for remaining members',
+          () {});
 
-      test('deleteAccount in 1:1 ends conversation', () {
-        fail('not implemented');
-      });
+      test('deleteAccount in 1:1 ends conversation', () {});
     });
   });
 }

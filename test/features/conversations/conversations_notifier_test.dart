@@ -1,8 +1,8 @@
-import 'dart:async';
-
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:roger/core/database/app_database.dart';
 import 'package:roger/core/models/conversation.dart';
 import 'package:roger/core/models/user.dart';
 import 'package:roger/core/providers.dart';
@@ -14,15 +14,8 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 class MockContactsService extends Mock implements ContactsService {}
 class MockSupabaseClient extends Mock implements SupabaseClient {}
 
-// Fake notifier — overrides build() to return a preset state, skipping
-// all Supabase setup. onNewMessage() uses the real implementation.
-class _FakeConversationsNotifier extends ConversationsNotifier {
-  final ConversationsState _seed;
-  _FakeConversationsNotifier(this._seed);
-
-  @override
-  ConversationsState build() => _seed;
-}
+AppDatabase _makeInMemoryDatabase() =>
+    AppDatabase(NativeDatabase.memory());
 
 // ---- Test data ----
 
@@ -31,9 +24,12 @@ final _conv2 = Conversation(id: 'conv-2', createdAt: DateTime(2026, 1, 2));
 
 final _otherUser = User(
   id: 'other-user',
-  email: 'other@example.com',
-  phoneNumber: '+15551111111',
-  displayName: 'Other',
+  avatarColor: 'Rust',
+  createdAt: DateTime(2026, 1, 1),
+);
+
+final _userU1 = User(
+  id: 'u1',
   avatarColor: 'Rust',
   createdAt: DateTime(2026, 1, 1),
 );
@@ -57,26 +53,24 @@ ConversationSummary _makeSummary({
 
 void main() {
   late MockContactsService contactsService;
+  late AppDatabase appDatabase;
 
   setUp(() {
     contactsService = MockContactsService();
-    when(() => contactsService.cachedContacts).thenReturn([]);
-    when(() => contactsService.cachedRogerUsers).thenReturn([]);
+    appDatabase = _makeInMemoryDatabase();
   });
 
-  ProviderContainer _makeContainer({ConversationsState? seed}) {
-    return ProviderContainer(
+  tearDown(() async => appDatabase.close());
+
+  ProviderContainer makeContainer({ConversationsState? seed}) {
+    return ProviderContainer.test(
       overrides: [
         if (seed != null)
-          conversationsProvider.overrideWith(
-            () => _FakeConversationsNotifier(seed),
-          ),
+          conversationsProvider.overrideWithBuild((ref, self) => seed),
         contactsServiceProvider.overrideWithValue(contactsService),
         supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
         currentUserIdProvider.overrideWithValue('current-user-id'),
-        authStateChangesProvider.overrideWith(
-          (ref) => const Stream<AuthState>.empty(),
-        ),
+        appDatabaseProvider.overrideWithValue(appDatabase),
       ],
     );
   }
@@ -84,9 +78,7 @@ void main() {
   group('ConversationsNotifier', () {
     group('initial state', () {
       test('starts with empty list, not loading, no error', () {
-        final container = _makeContainer();
-        addTearDown(container.dispose);
-
+        final container = makeContainer();
         final state = container.read(conversationsProvider);
         expect(state.conversations, isEmpty);
         expect(state.isLoading, false);
@@ -125,9 +117,7 @@ void main() {
             ),
           ],
         );
-        final container = _makeContainer(seed: seed);
-        addTearDown(container.dispose);
-
+        final container = makeContainer(seed: seed);
         container.read(conversationsProvider.notifier).onNewMessage(
           conversationId: 'conv-1',
           senderId: 'other-user',
@@ -148,9 +138,7 @@ void main() {
             ),
           ],
         );
-        final container = _makeContainer(seed: seed);
-        addTearDown(container.dispose);
-
+        final container = makeContainer(seed: seed);
         container.read(conversationsProvider.notifier).onNewMessage(
           conversationId: 'conv-1',
           senderId: 'current-user-id',
@@ -169,9 +157,7 @@ void main() {
             _makeSummary(conversation: _conv1, lastMessageAt: original),
           ],
         );
-        final container = _makeContainer(seed: seed);
-        addTearDown(container.dispose);
-
+        final container = makeContainer(seed: seed);
         container.read(conversationsProvider.notifier).onNewMessage(
           conversationId: 'conv-1',
           senderId: 'other-user',
@@ -194,9 +180,7 @@ void main() {
             _makeSummary(conversation: _conv1, lastMessageAt: older),
           ],
         );
-        final container = _makeContainer(seed: seed);
-        addTearDown(container.dispose);
-
+        final container = makeContainer(seed: seed);
         // New message for conv1 makes it the most recent
         container.read(conversationsProvider.notifier).onNewMessage(
           conversationId: 'conv-1',
@@ -225,9 +209,7 @@ void main() {
             ),
           ],
         );
-        final container = _makeContainer(seed: seed);
-        addTearDown(container.dispose);
-
+        final container = makeContainer(seed: seed);
         container.read(conversationsProvider.notifier).onNewMessage(
           conversationId: 'conv-1',
           senderId: 'other-user',
@@ -238,6 +220,82 @@ void main() {
         final conv2 = conversations.firstWhere((c) => c.conversation.id == 'conv-2');
         expect(conv2.hasUnread, false);
         expect(conv2.displayName, 'Conv Two');
+      });
+    });
+
+    group('reresolveNames (display-name "?" reactivity fix)', () {
+      test('re-resolves member and display names from an updated map', () {
+        // A member you hadn't picked yet renders as "?" at load. When the
+        // addedContacts map gains their name, the notifier re-resolves.
+        final seed = ConversationsState(
+          conversations: [
+            ConversationSummary(
+              conversation: _conv1,
+              displayName: '?',
+              members: [_userU1],
+              memberContactNames: const ['?'],
+            ),
+          ],
+        );
+        final container = makeContainer(seed: seed);
+        container
+            .read(conversationsProvider.notifier)
+            .reresolveNames({'u1': 'Jordan'});
+
+        final updated =
+            container.read(conversationsProvider).conversations.first;
+        expect(updated.displayName, 'Jordan');
+        expect(updated.memberContactNames, ['Jordan']);
+      });
+
+      test('a member still absent from the map stays "?"', () {
+        final seed = ConversationsState(
+          conversations: [
+            ConversationSummary(
+              conversation: _conv1,
+              displayName: '?',
+              members: [_userU1],
+              memberContactNames: const ['?'],
+            ),
+          ],
+        );
+        final container = makeContainer(seed: seed);
+        container
+            .read(conversationsProvider.notifier)
+            .reresolveNames(const {'someone-else': 'Casey'});
+
+        final updated =
+            container.read(conversationsProvider).conversations.first;
+        expect(updated.displayName, '?');
+        expect(updated.memberContactNames, ['?']);
+      });
+
+      test('a group with a set name keeps it; member names still re-resolve',
+          () {
+        final groupConv = Conversation(
+          id: 'g1',
+          name: 'Trip crew',
+          createdAt: DateTime(2026, 1, 1),
+        );
+        final seed = ConversationsState(
+          conversations: [
+            ConversationSummary(
+              conversation: groupConv,
+              displayName: 'Trip crew',
+              members: [_userU1],
+              memberContactNames: const ['?'],
+            ),
+          ],
+        );
+        final container = makeContainer(seed: seed);
+        container
+            .read(conversationsProvider.notifier)
+            .reresolveNames({'u1': 'Jordan'});
+
+        final updated =
+            container.read(conversationsProvider).conversations.first;
+        expect(updated.displayName, 'Trip crew'); // group name wins
+        expect(updated.memberContactNames, ['Jordan']); // for avatar initials
       });
     });
   });

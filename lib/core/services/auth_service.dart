@@ -8,17 +8,33 @@ class AuthService {
   AuthService({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
 
-  Future<void> sendMagicLink(String email) async {
-    await _client.auth.signInWithOtp(
-      email: email,
-      emailRedirectTo: 'com.rogermessaging.app://login',
+  /// Synchronously available after `Supabase.initialize` — the stored session
+  /// (if any) is loaded from local storage during initialize. Used by
+  /// `AuthNotifier.build()` to seed `AuthState` before the first frame.
+  Session? get currentSession => _client.auth.currentSession;
+
+  /// Auth lifecycle events. `AuthNotifier` acts on `signedOut` only; the
+  /// `signedIn` / `tokenRefreshed` / `initialSession` events fire on startup
+  /// and reacting to them would clobber the seed / async correction.
+  Stream<AuthChangeEvent> get authEvents =>
+      _client.auth.onAuthStateChange.map((s) => s.event);
+
+  Future<void> sendOtp(String phoneNumber) async {
+    await _client.auth.signInWithOtp(phone: phoneNumber);
+  }
+
+  Future<AuthResponse> verifyOtp({
+    required String phoneNumber,
+    required String otpCode,
+  }) async {
+    return await _client.auth.verifyOTP(
+      phone: phoneNumber,
+      token: otpCode,
+      type: OtpType.sms,
     );
   }
 
   Future<app.User> createAccount({
-    required String email,
-    required String phoneNumber,
-    required String displayName,
     required String avatarColor,
   }) async {
     final authUser = _client.auth.currentUser;
@@ -26,33 +42,21 @@ class AuthService {
       throw Exception('Not authenticated.');
     }
 
-    final now = DateTime.now().toUtc().toIso8601String();
+    // create_account (security definer) reads the verified phone from
+    // auth.users, writes users + user_settings atomically, and returns the new
+    // user id. The server owns identity, so we read the row back through the
+    // one authoritative path (getCurrentUser) rather than constructing a User
+    // client-side — the stored row carries the server's created_at and any
+    // defaults.
+    await _client.rpc('create_account', params: {
+      'p_avatar_color': avatarColor,
+    });
 
-    final userRow = {
-      'id': authUser.id,
-      'email': email,
-      'phone_number': phoneNumber,
-      'display_name': displayName,
-      'avatar_color': avatarColor,
-      'phone_verified': false,
-      'created_at': now,
-    };
-
-    final settingsRow = {
-      'user_id': authUser.id,
-      'created_at': now,
-      'updated_at': now,
-    };
-
-    final insertedUser = await _client
-        .from('users')
-        .insert(userRow)
-        .select()
-        .single();
-
-    await _client.from('user_settings').insert(settingsRow);
-
-    return _userFromRow(insertedUser);
+    final user = await getCurrentUser();
+    if (user == null) {
+      throw Exception('Account creation did not produce a user row.');
+    }
+    return user;
   }
 
   Future<app.User?> getCurrentUser() async {
@@ -86,27 +90,15 @@ class AuthService {
     await _client.auth.signOut();
   }
 
-  /// Checks if a phone number is already claimed by another account.
-  Future<bool> isPhoneNumberTaken(String phoneNumber) async {
-    final row = await _client
-        .from('users')
-        .select('id')
-        .eq('phone_number', phoneNumber)
-        .maybeSingle();
-    return row != null;
-  }
-
   Future<void> updatePhoneNumber(String newNumber) async {
+    // TODO: Phone is now the auth identity. Changing it requires updating
+    // both public.users AND auth.users. auth.users update requires
+    // service_role key — needs Edge Function or database trigger,
+    // same pattern as deleteAccount. Must also verify OTP to new number
+    // before updating (spec: Settings → phone number change).
     await _client
         .from('users')
-        .update({'phone_number': newNumber, 'phone_verified': false})
-        .eq('id', _client.auth.currentUser!.id);
-  }
-
-  Future<void> updateDisplayName(String name) async {
-    await _client
-        .from('users')
-        .update({'display_name': name})
+        .update({'phone_number': newNumber})
         .eq('id', _client.auth.currentUser!.id);
   }
 
@@ -117,14 +109,18 @@ class AuthService {
         .eq('id', _client.auth.currentUser!.id);
   }
 
+  Future<void> updateRecoveryEmail(String email) async {
+    await _client
+        .from('users')
+        .update({'recovery_email': email})
+        .eq('id', _client.auth.currentUser!.id);
+  }
+
   app.User _userFromRow(Map<String, dynamic> row) {
     return app.User(
       id: row['id'] as String,
-      email: row['email'] as String,
-      phoneNumber: row['phone_number'] as String,
-      displayName: row['display_name'] as String,
       avatarColor: row['avatar_color'] as String,
-      phoneVerified: row['phone_verified'] as bool? ?? false,
+      recoveryEmail: row['recovery_email'] as String?,
       lastActiveAt: row['last_active_at'] != null
           ? DateTime.parse(row['last_active_at'] as String)
           : null,

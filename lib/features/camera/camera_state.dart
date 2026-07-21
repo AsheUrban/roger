@@ -32,4 +32,40 @@ class CameraState {
     this.isLoading = false,
     this.error,
   });
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is CameraState &&
+        other.conversationId == conversationId &&
+        other.mode == mode &&
+        other.isFrontCamera == isFrontCamera &&
+        other.isOtherUserActive == isOtherUserActive &&
+        other.isCallActive == isCallActive &&
+        other.thumbnails == thumbnails &&
+        other.activeMessage == activeMessage &&
+        other.playbackSpeed == playbackSpeed &&
+        other.isMuted == isMuted &&
+        other.showCaptions == showCaptions &&
+        other.recordingElapsed == recordingElapsed &&
+        other.isLoading == isLoading &&
+        other.error == error;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        conversationId,
+        mode,
+        isFrontCamera,
+        isOtherUserActive,
+        isCallActive,
+        thumbnails,
+        activeMessage,
+        playbackSpeed,
+        isMuted,
+        showCaptions,
+        recordingElapsed,
+        isLoading,
+        error,
+      );
 }

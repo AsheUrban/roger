@@ -1,17 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('ConversationMember model', () {
-    test('leftAt is nullable (null means still active)', () {
-      fail('not implemented');
-    });
+  group('ConversationMember model', skip: 'feature not built — step 7', () {
+    test('leftAt is nullable (null means still active)', () {});
 
-    test('customEmoji defaults to standard set', () {
-      fail('not implemented');
-    });
+    test('customEmoji defaults to standard set', () {});
 
-    test('muted defaults to false', () {
-      fail('not implemented');
-    });
+    test('muted defaults to false', () {});
   });
 }

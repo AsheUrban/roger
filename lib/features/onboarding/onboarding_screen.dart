@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:intl_phone_number_input/intl_phone_number_input.dart';
 
 import '../../core/theme/colors.dart';
+import '../../core/theme/typography.dart' as t;
 import 'onboarding_notifier.dart';
 import 'onboarding_state.dart';
 
@@ -26,12 +27,8 @@ class OnboardingScreen extends ConsumerWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
           child: switch (state.step) {
-            OnboardingStep.emailEntry => const _EmailEntryStep(),
-            OnboardingStep.awaitingEmail => const _AwaitingEmailStep(),
-            OnboardingStep.phoneNumber => const _PhoneNumberStep(),
-            OnboardingStep.displayName => const _DisplayNameStep(),
-            OnboardingStep.contactsPermission =>
-              const _ContactsPermissionStep(),
+            OnboardingStep.phoneEntry => const _PhoneEntryStep(),
+            OnboardingStep.otpVerification => const _OtpVerificationStep(),
           },
         ),
       ),
@@ -40,17 +37,18 @@ class OnboardingScreen extends ConsumerWidget {
 }
 
 // ============================================================
-// Email Entry (no back button — this is the first step)
+// Phone Entry (no back button — this is the first step)
 // ============================================================
-class _EmailEntryStep extends ConsumerStatefulWidget {
-  const _EmailEntryStep();
+class _PhoneEntryStep extends ConsumerStatefulWidget {
+  const _PhoneEntryStep();
 
   @override
-  ConsumerState<_EmailEntryStep> createState() => _EmailEntryStepState();
+  ConsumerState<_PhoneEntryStep> createState() => _PhoneEntryStepState();
 }
 
-class _EmailEntryStepState extends ConsumerState<_EmailEntryStep> {
+class _PhoneEntryStepState extends ConsumerState<_PhoneEntryStep> {
   final _controller = TextEditingController();
+  PhoneNumber _phoneNumber = PhoneNumber(isoCode: 'US');
 
   @override
   void dispose() {
@@ -68,26 +66,40 @@ class _EmailEntryStepState extends ConsumerState<_EmailEntryStep> {
         const Spacer(),
         Text(
           'roger',
-          style: GoogleFonts.youngSerif(
-            fontSize: 40,
-            color: warmWhite,
-          ),
+          style: t.wordmarkLarge,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 48),
-        TextField(
-          controller: _controller,
-          keyboardType: TextInputType.emailAddress,
-          style: const TextStyle(color: warmWhite),
-          decoration: InputDecoration(
-            hintText: 'Email address',
-            hintStyle: TextStyle(color: warmWhite.withValues(alpha: 0.5)),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: warmWhite.withValues(alpha: 0.3)),
+        Container(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: warmWhite.withValues(alpha: 0.3)),
             ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: warmWhite),
+          ),
+          child: InternationalPhoneNumberInput(
+            onInputChanged: (PhoneNumber number) {
+              _phoneNumber = number;
+            },
+            selectorConfig: const SelectorConfig(
+              selectorType: PhoneInputSelectorType.BOTTOM_SHEET,
+              useBottomSheetSafeArea: true,
+              leadingPadding: 0,
+              trailingSpace: false,
             ),
+            spaceBetweenSelectorAndTextField: 8,
+            textFieldController: _controller,
+            initialValue: _phoneNumber,
+            keyboardType: TextInputType.phone,
+            textStyle: t.inputText,
+            selectorTextStyle: t.inputText,
+            inputDecoration: InputDecoration(
+              hintText: 'Phone number',
+              hintStyle: t.hintText,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+            ),
+            cursorColor: warmWhite,
           ),
         ),
         _ErrorText(state.error),
@@ -96,8 +108,8 @@ class _EmailEntryStepState extends ConsumerState<_EmailEntryStep> {
           label: 'Continue',
           isLoading: state.isLoading,
           onPressed: () {
-            ref.read(onboardingProvider.notifier).sendMagicLink(
-                  _controller.text,
+            ref.read(onboardingProvider.notifier).sendOtp(
+                  _phoneNumber.phoneNumber ?? '',
                 );
           },
         ),
@@ -108,80 +120,17 @@ class _EmailEntryStepState extends ConsumerState<_EmailEntryStep> {
 }
 
 // ============================================================
-// Awaiting Email (magic link sent, waiting for user to tap it)
+// OTP Verification
 // ============================================================
-class _AwaitingEmailStep extends ConsumerWidget {
-  const _AwaitingEmailStep();
+class _OtpVerificationStep extends ConsumerStatefulWidget {
+  const _OtpVerificationStep();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(onboardingProvider);
-    final notifier = ref.read(onboardingProvider.notifier);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _BackButton(onPressed: notifier.goBack),
-        const Spacer(),
-        const Text(
-          'Check your email',
-          style: TextStyle(color: warmWhite, fontSize: 24),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          state.email,
-          style: const TextStyle(color: warmWhite, fontSize: 18),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Tap the link in the email to continue.\nOpen it on this device.',
-          style: TextStyle(
-            color: warmWhite.withValues(alpha: 0.6),
-            fontSize: 14,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        _ErrorText(state.error),
-        if (state.isLoading) ...[
-          const SizedBox(height: 32),
-          const Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: warmWhite,
-              ),
-            ),
-          ),
-        ],
-        const SizedBox(height: 32),
-        TextButton(
-          onPressed: state.isLoading ? null : notifier.resendMagicLink,
-          child: const Text(
-            'Resend email',
-            style: TextStyle(color: warmWhite),
-          ),
-        ),
-        const Spacer(flex: 2),
-      ],
-    );
-  }
+  ConsumerState<_OtpVerificationStep> createState() =>
+      _OtpVerificationStepState();
 }
 
-// ============================================================
-// Phone Number
-// ============================================================
-class _PhoneNumberStep extends ConsumerStatefulWidget {
-  const _PhoneNumberStep();
-
-  @override
-  ConsumerState<_PhoneNumberStep> createState() => _PhoneNumberStepState();
-}
-
-class _PhoneNumberStepState extends ConsumerState<_PhoneNumberStep> {
+class _OtpVerificationStepState extends ConsumerState<_OtpVerificationStep> {
   final _controller = TextEditingController();
 
   @override
@@ -201,161 +150,46 @@ class _PhoneNumberStepState extends ConsumerState<_PhoneNumberStep> {
         _BackButton(onPressed: notifier.goBack),
         const Spacer(),
         const Text(
-          'Your phone number',
-          style: TextStyle(color: warmWhite, fontSize: 24),
+          'Enter verification code',
+          style: t.titleLarge,
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Text(
-          'Your phone number helps friends find you on roger.',
-          style: TextStyle(
-            color: warmWhite.withValues(alpha: 0.6),
-            fontSize: 14,
-          ),
+          state.phoneNumber,
+          style: t.titleMedium,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 32),
         TextField(
           controller: _controller,
-          keyboardType: TextInputType.phone,
-          style: const TextStyle(color: warmWhite),
+          keyboardType: TextInputType.number,
+          style: t.inputText,
+          textAlign: TextAlign.center,
           decoration: InputDecoration(
-            hintText: 'Phone number',
-            hintStyle: TextStyle(color: warmWhite.withValues(alpha: 0.5)),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: warmWhite.withValues(alpha: 0.3)),
-            ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: warmWhite),
-            ),
+            hintText: '000000',
+            hintStyle: t.hintText,
+            enabledBorder: t.inputBorderEnabled,
+            focusedBorder: t.inputBorderFocused,
           ),
         ),
         _ErrorText(state.error),
         const SizedBox(height: 24),
         _PrimaryButton(
-          label: 'Continue',
+          label: 'Verify',
           isLoading: state.isLoading,
           onPressed: () {
-            notifier.submitPhoneNumber(_controller.text);
+            notifier.verifyOtp(_controller.text);
           },
         ),
-        const Spacer(flex: 2),
-      ],
-    );
-  }
-}
-
-// ============================================================
-// Display Name
-// ============================================================
-class _DisplayNameStep extends ConsumerStatefulWidget {
-  const _DisplayNameStep();
-
-  @override
-  ConsumerState<_DisplayNameStep> createState() => _DisplayNameStepState();
-}
-
-class _DisplayNameStepState extends ConsumerState<_DisplayNameStep> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(onboardingProvider);
-    final notifier = ref.read(onboardingProvider.notifier);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _BackButton(onPressed: notifier.goBack),
-        const Spacer(),
-        const Text(
-          'What should people\ncall you?',
-          style: TextStyle(color: warmWhite, fontSize: 24),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 32),
-        TextField(
-          controller: _controller,
-          maxLength: 50,
-          style: const TextStyle(color: warmWhite),
-          decoration: InputDecoration(
-            hintText: 'Display name',
-            hintStyle: TextStyle(color: warmWhite.withValues(alpha: 0.5)),
-            counterStyle: TextStyle(color: warmWhite.withValues(alpha: 0.3)),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: warmWhite.withValues(alpha: 0.3)),
-            ),
-            focusedBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: warmWhite),
-            ),
-          ),
-        ),
-        _ErrorText(state.error),
-        const SizedBox(height: 24),
-        _PrimaryButton(
-          label: 'Continue',
-          onPressed: () {
-            notifier.setDisplayName(_controller.text);
-          },
-        ),
-        const Spacer(flex: 2),
-      ],
-    );
-  }
-}
-
-// ============================================================
-// Contacts Permission
-// ============================================================
-class _ContactsPermissionStep extends ConsumerWidget {
-  const _ContactsPermissionStep();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(onboardingProvider);
-    final notifier = ref.read(onboardingProvider.notifier);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _BackButton(onPressed: notifier.goBack),
-        const Spacer(),
-        const Text(
-          'Find your people',
-          style: TextStyle(color: warmWhite, fontSize: 24),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Allow contacts access to find friends on roger. '
-          'Your contacts are hashed on-device — raw numbers never leave your phone.',
-          style: TextStyle(
-            color: warmWhite.withValues(alpha: 0.6),
-            fontSize: 14,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 32),
-        _PrimaryButton(
-          label: 'Allow contacts',
-          isLoading: state.isLoading,
-          onPressed: notifier.requestContactsPermission,
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         TextButton(
-          onPressed: state.isLoading ? null : notifier.skipContactsPermission,
+          onPressed: state.isLoading ? null : notifier.resendOtp,
           child: const Text(
-            'Not now',
-            style: TextStyle(color: warmWhite),
+            'Resend code',
+            style: t.buttonLabel,
           ),
         ),
-        _ErrorText(state.error),
         const Spacer(flex: 2),
       ],
     );
@@ -394,7 +228,7 @@ class _ErrorText extends StatelessWidget {
       padding: const EdgeInsets.only(top: 12),
       child: Text(
         error!,
-        style: const TextStyle(color: errorColor, fontSize: 14),
+        style: t.errorText,
       ),
     );
   }
@@ -425,15 +259,8 @@ class _PrimaryButton extends StatelessWidget {
           ),
         ),
         child: isLoading
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: warmWhite,
-                ),
-              )
-            : Text(label, style: const TextStyle(fontSize: 16)),
+            ? t.loadingSpinner
+            : Text(label, style: t.bodyText),
       ),
     );
   }

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../core/models/conversation.dart';
 import '../../core/models/user.dart';
 
@@ -10,6 +12,10 @@ class ConversationSummary {
   final bool hasUnread;
   final bool isOtherUserActive;
   final DateTime? otherUserLastActiveAt;
+  // Count of other members whose account was deleted (server nulled user_id).
+  // Not in `members` — they have no User to carry. The screen renders one
+  // deleted-user avatar (spec §4) per count.
+  final int deletedMemberCount;
 
   const ConversationSummary({
     required this.conversation,
@@ -20,6 +26,7 @@ class ConversationSummary {
     this.hasUnread = false,
     this.isOtherUserActive = false,
     this.otherUserLastActiveAt,
+    this.deletedMemberCount = 0,
   });
 
   ConversationSummary copyWith({
@@ -31,6 +38,7 @@ class ConversationSummary {
     bool? hasUnread,
     bool? isOtherUserActive,
     DateTime? Function()? otherUserLastActiveAt,
+    int? deletedMemberCount,
   }) {
     return ConversationSummary(
       conversation: conversation ?? this.conversation,
@@ -44,8 +52,37 @@ class ConversationSummary {
       otherUserLastActiveAt: otherUserLastActiveAt != null
           ? otherUserLastActiveAt()
           : this.otherUserLastActiveAt,
+      deletedMemberCount: deletedMemberCount ?? this.deletedMemberCount,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is ConversationSummary &&
+        other.conversation == conversation &&
+        other.displayName == displayName &&
+        listEquals(other.members, members) &&
+        listEquals(other.memberContactNames, memberContactNames) &&
+        other.lastMessageAt == lastMessageAt &&
+        other.hasUnread == hasUnread &&
+        other.isOtherUserActive == isOtherUserActive &&
+        other.otherUserLastActiveAt == otherUserLastActiveAt &&
+        other.deletedMemberCount == deletedMemberCount;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        conversation,
+        displayName,
+        Object.hashAll(members),
+        Object.hashAll(memberContactNames),
+        lastMessageAt,
+        hasUnread,
+        isOtherUserActive,
+        otherUserLastActiveAt,
+        deletedMemberCount,
+      );
 }
 
 class ConversationsState {
@@ -70,4 +107,20 @@ class ConversationsState {
       error: error != null ? error() : this.error,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is ConversationsState &&
+        listEquals(other.conversations, conversations) &&
+        other.isLoading == isLoading &&
+        other.error == error;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        Object.hashAll(conversations),
+        isLoading,
+        error,
+      );
 }

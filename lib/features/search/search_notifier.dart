@@ -1,11 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
-import '../../core/models/user.dart';
+import '../../core/added_contacts_notifier.dart';
 import '../../core/providers.dart';
 import '../../core/services/contacts_service.dart';
+import '../../core/services/conversation_service.dart';
 import 'search_state.dart';
 
 final searchProvider =
@@ -13,250 +11,132 @@ final searchProvider =
 
 class SearchNotifier extends Notifier<SearchState> {
   late final ContactsService _contactsService;
-  late final SupabaseClient _client;
+  late final ConversationService _conversationService;
   late final String? _currentUserId;
-  Timer? _debounceTimer;
 
   @override
   SearchState build() {
     _contactsService = ref.read(contactsServiceProvider);
-    _client = ref.read(supabaseClientProvider);
+    _conversationService = ref.read(conversationServiceProvider);
     _currentUserId = ref.read(currentUserIdProvider);
 
-    ref.onDispose(() {
-      _debounceTimer?.cancel();
-    });
+    // Re-load the added-contacts list whenever the store changes (e.g. a fresh
+    // pick lands), so the list stays in sync without a manual refresh.
+    ref.listen(addedContactsProvider, (_, _) => _loadAddedContacts());
 
-    // Check permission and load contacts if granted
-    _initAsync();
-
+    Future.microtask(_loadAddedContacts);
     return const SearchState();
   }
 
-  Future<void> _initAsync() async {
-    final granted = await _contactsService.hasPermission();
-    if (granted) {
-      state = state.copyWith(hasContactsPermission: true);
-      loadInitialContacts();
-    }
+  /// Loads the "people you've added" list from the AddedContacts drift store,
+  /// applying the current name filter. Everyone in the store is on roger
+  /// (they only land there when `discover_user` matched).
+  Future<void> _loadAddedContacts() async {
+    final rows =
+        await ref.read(appDatabaseProvider).addedContactsDao.getAddedContacts();
+    if (!ref.mounted) return;
+    state = state.copyWith(results: _buildResults(rows, filter: state.query));
   }
 
-  Future<void> loadInitialContacts() async {
-    state = state.copyWith(isLoading: true, error: () => null);
-
-    try {
-      await _contactsService.refreshBatchCheck();
-      state = state.copyWith(
-        hasContactsPermission: true,
-        results: _buildResults(),
-        isLoading: false,
-      );
-    } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: () => e.toString(),
-      );
-    }
+  List<AddedContactResult> _buildResults(
+    List<dynamic> rows, {
+    String? filter,
+  }) {
+    final q = (filter ?? '').toLowerCase();
+    final results = rows
+        .where((r) => q.isEmpty || (r.contactName as String).toLowerCase().contains(q))
+        .map((r) => AddedContactResult(
+              userId: r.userId as String,
+              contactName: r.contactName as String,
+              avatarColor: r.avatarColor as String,
+            ))
+        .toList();
+    results.sort((a, b) =>
+        a.contactName.toLowerCase().compareTo(b.contactName.toLowerCase()));
+    return results;
   }
 
-  Future<void> requestContactsPermission() async {
-    final granted = await _contactsService.requestPermission();
-    if (granted) {
-      state = state.copyWith(hasContactsPermission: true);
-      await loadInitialContacts();
-    }
-  }
-
+  /// Filters the added-contacts list by name. Local only — there is no server
+  /// search under single-pick (finding someone new is an explicit pick).
   Future<void> search(String query) async {
     state = state.copyWith(query: query, error: () => null);
-
-    if (query.isEmpty) {
-      state = state.copyWith(results: _buildResults());
-      return;
-    }
-
-    // Immediate local filter
-    state = state.copyWith(results: _buildResults(filter: query));
-
-    // Debounced server check to catch new signups
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
-      try {
-        final serverResult = await _contactsService.onDemandSearch(query);
-        if (serverResult != null) {
-          // Re-filter with updated data
-          state = state.copyWith(results: _buildResults(filter: query));
-        }
-      } catch (_) {
-        // Network failure on server check — fall back to local only
-      }
-    });
+    await _loadAddedContacts();
   }
 
-  /// Check if a 1:1 conversation already exists with this user.
-  /// If yes, return its ID. If no, create one. Never create duplicates.
-  Future<String> startChat(String userId) async {
-    final currentUserId = _currentUserId!;
+  /// Opens the OS contact picker for one contact, checks it against roger via
+  /// `discover_user`, and — if matched — records it in AddedContacts (which
+  /// re-loads the list). A non-roger pick sets [SearchState.notOnRogerName]
+  /// (inviting them is a later slice). A cancelled pick is a no-op.
+  Future<void> addSomeone() async {
+    state = state.copyWith(notOnRogerName: () => null, error: () => null);
 
-    // Find existing 1:1 conversation
-    final myMemberships = await _client
-        .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', currentUserId)
-        .isFilter('left_at', null);
-
-    final theirMemberships = await _client
-        .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', userId)
-        .isFilter('left_at', null);
-
-    final myConvIds =
-        (myMemberships as List).map((r) => r['conversation_id']).toSet();
-    final theirConvIds =
-        (theirMemberships as List).map((r) => r['conversation_id']).toSet();
-    final shared = myConvIds.intersection(theirConvIds);
-
-    if (shared.isNotEmpty) {
-      return shared.first as String;
-    }
-
-    // Create new conversation
-    final conv = await _client
-        .from('conversations')
-        .insert({'created_at': DateTime.now().toUtc().toIso8601String()})
-        .select('id')
-        .single();
-
-    final convId = conv['id'] as String;
-    final now = DateTime.now().toUtc().toIso8601String();
-
-    await _client.from('conversation_members').insert([
-      {
-        'conversation_id': convId,
-        'user_id': currentUserId,
-        'joined_at': now,
-      },
-      {
-        'conversation_id': convId,
-        'user_id': userId,
-        'joined_at': now,
-      },
-    ]);
-
-    return convId;
-  }
-
-  /// Create pending conversation + invite row for a non-roger contact.
-  // TODO: SMS invite via deep link (step 5 full implementation)
-  Future<void> sendInvite(String phoneNumber) async {
-    final currentUserId = _currentUserId!;
-    final now = DateTime.now().toUtc();
+    final picked = await _contactsService.pickContact();
+    if (!ref.mounted || picked == null) return;
 
     try {
-      // Create conversation
-      final conv = await _client
-          .from('conversations')
-          .insert({'created_at': now.toIso8601String()})
-          .select('id')
-          .single();
+      final match = await _contactsService.discover(picked.phoneNumber);
+      if (!ref.mounted) return;
 
-      final convId = conv['id'] as String;
+      if (match == null) {
+        state = state.copyWith(notOnRogerName: () => picked.name);
+        return;
+      }
 
-      // Add current user as member
-      await _client.from('conversation_members').insert({
-        'conversation_id': convId,
-        'user_id': currentUserId,
-        'joined_at': now.toIso8601String(),
-      });
-
-      // Create a placeholder message for the invite
-      final msg = await _client
-          .from('messages')
-          .insert({
-            'conversation_id': convId,
-            'sender_id': currentUserId,
-            'type': 'note',
-            'encrypted_text': '', // placeholder
-            'created_at': now.toIso8601String(),
-          })
-          .select('id')
-          .single();
-
-      // Create pending invite with 7-day expiry
-      await _client.from('pending_invites').insert({
-        'phone_number': phoneNumber,
-        'inviting_user_id': currentUserId,
-        'conversation_id': convId,
-        'message_id': msg['id'] as String,
-        'expires_at': now.add(const Duration(days: 7)).toIso8601String(),
-        'created_at': now.toIso8601String(),
-      });
-
-      // Update local state to show pending
-      final updatedResults = state.results.map((r) {
-        if (r.phoneNumber == phoneNumber) {
-          return SearchResult(
-            rogerUser: r.rogerUser,
-            contactName: r.contactName,
-            phoneNumber: r.phoneNumber,
-            isOnRoger: r.isOnRoger,
-            hasPendingInvite: true,
+      // A roger match — record the picked name + discovered color. The
+      // addedContactsProvider listener re-loads the list.
+      await ref.read(addedContactsProvider.notifier).addContact(
+            userId: match.userId,
+            contactName: picked.name,
+            avatarColor: match.avatarColor,
           );
-        }
-        return r;
-      }).toList();
-
-      state = state.copyWith(results: updatedResults);
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(error: () => e.toString());
     }
   }
 
-  /// Build SearchResult list from cached contacts + roger users.
-  /// Sorted alphabetically by contact name.
-  List<SearchResult> _buildResults({String? filter}) {
-    final contacts = _contactsService.cachedContacts;
-    final rogerUsers = _contactsService.cachedRogerUsers;
+  /// Open the existing 1:1 with this user, or create one if none exists.
+  Future<String> startChat(String userId) {
+    return _conversationService.findOrCreate1to1(
+      currentUserId: _currentUserId!,
+      otherUserId: userId,
+    );
+  }
 
-    // Build phone → roger user lookup
-    final rogerByPhone = <String, User>{};
-    for (final user in rogerUsers) {
-      rogerByPhone[user.phoneNumber] = user;
+  // ── Group mode ──────────────────────────────────────────────────────────
+
+  void enterGroupMode() {
+    state = state.copyWith(isGroupMode: true, selectedUserIds: []);
+  }
+
+  void enterGroupModeWithContact(String userId) {
+    state = state.copyWith(isGroupMode: true, selectedUserIds: [userId]);
+  }
+
+  void exitGroupMode() {
+    state = state.copyWith(isGroupMode: false, selectedUserIds: []);
+  }
+
+  void toggleContactSelection(String userId) {
+    final current = List<String>.from(state.selectedUserIds);
+    if (current.contains(userId)) {
+      current.remove(userId);
+    } else {
+      // Groups capped at 5 — you + 4 others.
+      if (current.length >= 4) return;
+      current.add(userId);
     }
+    state = state.copyWith(selectedUserIds: current);
+  }
 
-    final results = <SearchResult>[];
-    final seenPhones = <String>{};
-
-    for (final contact in contacts) {
-      if (seenPhones.contains(contact.phoneNumber)) continue;
-      seenPhones.add(contact.phoneNumber);
-
-      final rogerUser = rogerByPhone[contact.phoneNumber];
-
-      // Skip showing yourself
-      if (rogerUser != null && rogerUser.id == _currentUserId) continue;
-
-      // Apply local text filter — contact name only, never server display name
-      if (filter != null && filter.isNotEmpty) {
-        final q = filter.toLowerCase();
-        final nameMatch = contact.name.toLowerCase().contains(q);
-        if (!nameMatch) continue;
-      }
-
-      results.add(SearchResult(
-        rogerUser: rogerUser,
-        contactName: contact.name,
-        phoneNumber: contact.phoneNumber,
-        isOnRoger: rogerUser != null,
-      ));
-    }
-
-    // Sort alphabetically by contact name
-    results.sort((a, b) {
-      return a.contactName.toLowerCase().compareTo(b.contactName.toLowerCase());
-    });
-
-    return results;
+  /// Create a group conversation with the selected members.
+  Future<String> createGroupConversation({String? name}) async {
+    final currentUserId = _currentUserId!;
+    final convId = await _conversationService.createConversation(
+      name: name,
+      memberIds: [currentUserId, ...state.selectedUserIds],
+    );
+    exitGroupMode();
+    return convId;
   }
 }

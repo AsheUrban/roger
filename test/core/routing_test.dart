@@ -1,79 +1,113 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:roger/core/auth_state.dart';
 import 'package:roger/main.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+
+// J (cached auth state) — the router redirect is now a pure synchronous
+// function of AuthState + path. See LOG_5_29.md.
+//
+// Under the combined-seed design the auth state is always resolved
+// (NeedsOnboarding | Onboarded) before the first frame, because `main()`
+// awaits `Supabase.initialize` and the notifier seeds synchronously from
+// `currentSession`. There is no runtime "checking" window, so AuthState has
+// two variants and the redirect never needs a transient null-while-checking
+// branch. (Earlier framing carried a third `Checking` variant; dropped as
+// unreachable — see LOG_5_29 "Refinements from writing the tests".)
 
 void main() {
-  group('Router redirect', () {
-    Session makeSession() {
-      return Session(
-        accessToken: 'test-token',
-        tokenType: 'bearer',
-        user: User(
-          id: 'test-user-id',
-          appMetadata: {},
-          userMetadata: {},
-          aud: 'authenticated',
-          createdAt: DateTime.now().toIso8601String(),
-        ),
-      );
-    }
+  group('routerRedirect', () {
+    group('NeedsOnboarding', () {
+      test('on /conversations redirects to /onboarding', () {
+        expect(
+          routerRedirect(
+              authState: const AuthStateNeedsOnboarding(),
+              path: '/conversations'),
+          '/onboarding',
+        );
+      });
 
-    test('unauthenticated user on /conversations redirected to /onboarding',
-        () async {
-      final result = await routerRedirect(
-        session: null,
-        hasUsersRow: (_) async => false,
-        path: '/conversations',
-      );
-      expect(result, '/onboarding');
+      test('on /search redirects to /onboarding', () {
+        expect(
+          routerRedirect(
+              authState: const AuthStateNeedsOnboarding(), path: '/search'),
+          '/onboarding',
+        );
+      });
+
+      test('on /camera/:id redirects to /onboarding', () {
+        expect(
+          routerRedirect(
+              authState: const AuthStateNeedsOnboarding(),
+              path: '/camera/abc'),
+          '/onboarding',
+        );
+      });
+
+      test('on /onboarding stays (no redirect)', () {
+        expect(
+          routerRedirect(
+              authState: const AuthStateNeedsOnboarding(), path: '/onboarding'),
+          isNull,
+        );
+      });
     });
 
-    test('unauthenticated user on /onboarding stays on /onboarding', () async {
-      final result = await routerRedirect(
-        session: null,
-        hasUsersRow: (_) async => false,
-        path: '/onboarding',
-      );
-      expect(result, isNull);
+    group('Onboarded', () {
+      test('on /onboarding redirects to /conversations', () {
+        expect(
+          routerRedirect(
+              authState: const AuthStateOnboarded(), path: '/onboarding'),
+          '/conversations',
+        );
+      });
+
+      test('on /conversations stays', () {
+        expect(
+          routerRedirect(
+              authState: const AuthStateOnboarded(), path: '/conversations'),
+          isNull,
+        );
+      });
+
+      test('on /search stays', () {
+        expect(
+          routerRedirect(
+              authState: const AuthStateOnboarded(), path: '/search'),
+          isNull,
+        );
+      });
+
+      test('on /camera/:id stays', () {
+        expect(
+          routerRedirect(
+              authState: const AuthStateOnboarded(), path: '/camera/abc'),
+          isNull,
+        );
+      });
     });
 
-    test(
-        'authenticated user without users row on /conversations redirected to /onboarding',
-        () async {
-      final result = await routerRedirect(
-        session: makeSession(),
-        hasUsersRow: (_) async => false,
-        path: '/conversations',
-      );
-      expect(result, '/onboarding');
-    });
+    group('no redirect loop (idempotent on its own target)', () {
+      test('NeedsOnboarding: redirect to /onboarding, then stays there', () {
+        final target = routerRedirect(
+            authState: const AuthStateNeedsOnboarding(),
+            path: '/conversations');
+        expect(target, '/onboarding');
+        expect(
+          routerRedirect(
+              authState: const AuthStateNeedsOnboarding(), path: target!),
+          isNull,
+        );
+      });
 
-    test('fully onboarded user on /onboarding redirected to /conversations',
-        () async {
-      final result = await routerRedirect(
-        session: makeSession(),
-        hasUsersRow: (_) async => true,
-        path: '/onboarding',
-      );
-      expect(result, '/conversations');
-    });
-
-    test('fully onboarded user on /conversations stays', () async {
-      final result = await routerRedirect(
-        session: makeSession(),
-        hasUsersRow: (_) async => true,
-        path: '/conversations',
-      );
-      expect(result, isNull);
-    });
-
-    test('fully onboarded user on /search stays', () async {
-      final result = await routerRedirect(
-        session: makeSession(),
-        hasUsersRow: (_) async => true,
-        path: '/search',
-      );
-      expect(result, isNull);
+      test('Onboarded: redirect to /conversations, then stays there', () {
+        final target = routerRedirect(
+            authState: const AuthStateOnboarded(), path: '/onboarding');
+        expect(target, '/conversations');
+        expect(
+          routerRedirect(
+              authState: const AuthStateOnboarded(), path: target!),
+          isNull,
+        );
+      });
     });
   });
 }

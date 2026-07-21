@@ -1,50 +1,95 @@
-import '../../core/models/user.dart';
+import 'package:flutter/foundation.dart';
 
-class SearchResult {
-  final User? rogerUser;
+/// A person you've added via single-pick who is on roger. Sourced from the
+/// AddedContacts drift store (spec §10) — name captured at add-time, avatar
+/// color from discovery. No phone number is held.
+class AddedContactResult {
+  final String userId;
   final String contactName;
-  final String phoneNumber;
-  final bool isOnRoger;
-  final bool hasPendingInvite;
+  final String avatarColor;
 
-  const SearchResult({
-    this.rogerUser,
+  const AddedContactResult({
+    required this.userId,
     required this.contactName,
-    required this.phoneNumber,
-    required this.isOnRoger,
-    this.hasPendingInvite = false,
+    required this.avatarColor,
   });
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is AddedContactResult &&
+        other.userId == userId &&
+        other.contactName == contactName &&
+        other.avatarColor == avatarColor;
+  }
+
+  @override
+  int get hashCode => Object.hash(userId, contactName, avatarColor);
 }
 
 class SearchState {
   final String query;
-  final List<SearchResult> results;
-  final bool hasContactsPermission;
+  final List<AddedContactResult> results;
   final bool isLoading;
   final String? error;
+  // Set after a pick when the number isn't on roger. Cleared on the next pick
+  // or search. (Inviting a non-roger contact is a later slice.)
+  final String? notOnRogerName;
+  final bool isGroupMode;
+  final List<String> selectedUserIds;
 
   const SearchState({
     this.query = '',
     this.results = const [],
-    this.hasContactsPermission = false,
     this.isLoading = false,
     this.error,
+    this.notOnRogerName,
+    this.isGroupMode = false,
+    this.selectedUserIds = const [],
   });
 
   SearchState copyWith({
     String? query,
-    List<SearchResult>? results,
-    bool? hasContactsPermission,
+    List<AddedContactResult>? results,
     bool? isLoading,
     String? Function()? error,
+    String? Function()? notOnRogerName,
+    bool? isGroupMode,
+    List<String>? selectedUserIds,
   }) {
     return SearchState(
       query: query ?? this.query,
       results: results ?? this.results,
-      hasContactsPermission:
-          hasContactsPermission ?? this.hasContactsPermission,
       isLoading: isLoading ?? this.isLoading,
       error: error != null ? error() : this.error,
+      notOnRogerName:
+          notOnRogerName != null ? notOnRogerName() : this.notOnRogerName,
+      isGroupMode: isGroupMode ?? this.isGroupMode,
+      selectedUserIds: selectedUserIds ?? this.selectedUserIds,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is SearchState &&
+        other.query == query &&
+        listEquals(other.results, results) &&
+        other.isLoading == isLoading &&
+        other.error == error &&
+        other.notOnRogerName == notOnRogerName &&
+        other.isGroupMode == isGroupMode &&
+        listEquals(other.selectedUserIds, selectedUserIds);
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        query,
+        Object.hashAll(results),
+        isLoading,
+        error,
+        notOnRogerName,
+        isGroupMode,
+        Object.hashAll(selectedUserIds),
+      );
 }

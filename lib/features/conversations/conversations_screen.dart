@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/models/user.dart';
 import '../../core/theme/colors.dart';
+import '../../core/theme/typography.dart' as t;
 import '../../core/utils/time_format.dart';
+import '../search/search_notifier.dart';
 import 'conversations_notifier.dart';
 import 'conversations_state.dart';
 
@@ -25,37 +26,21 @@ class ConversationsScreen extends ConsumerWidget {
             // Header
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-              child: Text(
-                'roger',
-                style: GoogleFonts.youngSerif(
-                  fontSize: 28,
-                  color: warmWhite,
-                ),
-              ),
+              child: Text('roger', style: t.wordmarkHeader),
             ),
 
             // Body
             Expanded(
               child: state.isLoading
                   ? const Center(
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: warmWhite,
-                        ),
-                      ),
+                      child: t.loadingSpinner,
                     )
                   : state.conversations.isEmpty
                       ? Center(
                           child: Text(
                             'No conversations yet.\nGo to Search to start one.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: warmWhite.withValues(alpha: 0.4),
-                              fontSize: 14,
-                            ),
+                            style: t.placeholderText,
                           ),
                         )
                       : ListView.separated(
@@ -66,7 +51,7 @@ class ConversationsScreen extends ConsumerWidget {
                             child: Divider(
                               height: 0.5,
                               thickness: 0.5,
-                              color: Colors.white.withValues(alpha: 0.06),
+                              color: t.listDividerColor,
                             ),
                           ),
                           itemBuilder: (context, index) {
@@ -87,12 +72,54 @@ class ConversationsScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(16),
                 child: Text(
                   state.error!,
-                  style: const TextStyle(color: errorColor, fontSize: 14),
+                  style: t.errorText,
                   textAlign: TextAlign.center,
                 ),
               ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            backgroundColor: charcoal2,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            builder: (_) => SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      leading: Icon(Icons.chat_bubble_outline,
+                          color: warmWhite.withValues(alpha: 0.6), size: 22),
+                      title: Text('New chat', style: t.rowName),
+                      onTap: () {
+                        Navigator.pop(context);
+                        context.go('/search');
+                      },
+                    ),
+                    ListTile(
+                      leading: Icon(Icons.group_add_outlined,
+                          color: warmWhite.withValues(alpha: 0.6), size: 22),
+                      title: Text('New group', style: t.rowName),
+                      onTap: () {
+                        Navigator.pop(context);
+                        ref.read(searchProvider.notifier).enterGroupMode();
+                        context.go('/search');
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+        backgroundColor: charcoal2,
+        child: const Icon(Icons.add, color: warmWhite),
       ),
     );
   }
@@ -106,7 +133,11 @@ class _ConversationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isGroup = summary.members.length > 1;
+    // Deleted members aren't in `members`; count both toward group-vs-1:1.
+    final otherSlots = summary.members.length + summary.deletedMemberCount;
+    final isGroup = otherSlots > 1;
+    final isDeleted1to1 =
+        !isGroup && summary.members.isEmpty && summary.deletedMemberCount > 0;
 
     return GestureDetector(
       onTap: onTap,
@@ -115,20 +146,24 @@ class _ConversationRow extends StatelessWidget {
         child: Row(
           children: [
             // Avatar area
-            isGroup
-                ? _GroupAvatar(
-                    members: summary.members,
-                    contactNames: summary.memberContactNames,
-                  )
-                : _SingleAvatar(
-                    member: summary.members.isNotEmpty
-                        ? summary.members.first
-                        : null,
-                    contactName: summary.memberContactNames.isNotEmpty
-                        ? summary.memberContactNames.first
-                        : '?',
-                    isActive: summary.isOtherUserActive,
-                  ),
+            if (isGroup)
+              _GroupAvatar(
+                members: summary.members,
+                contactNames: summary.memberContactNames,
+                deletedMemberCount: summary.deletedMemberCount,
+              )
+            else if (isDeleted1to1)
+              const _DeletedAvatar(size: 46)
+            else
+              _SingleAvatar(
+                member: summary.members.isNotEmpty
+                    ? summary.members.first
+                    : null,
+                contactName: summary.memberContactNames.isNotEmpty
+                    ? summary.memberContactNames.first
+                    : '?',
+                isActive: summary.isOtherUserActive,
+              ),
 
             const SizedBox(width: 14),
 
@@ -143,11 +178,7 @@ class _ConversationRow extends StatelessWidget {
                       Expanded(
                         child: Text(
                           summary.displayName,
-                          style: GoogleFonts.syne(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: warmWhite,
-                          ),
+                          style: t.rowName,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -156,10 +187,7 @@ class _ConversationRow extends StatelessWidget {
                           padding: const EdgeInsets.only(left: 8),
                           child: Text(
                             formatShortAge(summary.lastMessageAt!),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: warmWhite.withValues(alpha: 0.4),
-                            ),
+                            style: t.timestamp,
                           ),
                         ),
                     ],
@@ -189,29 +217,15 @@ class _ConversationRow extends StatelessWidget {
     );
   }
 
-  // Bottom line: "● active now" (olive) | "active Xm ago" | nothing
-  // Falls back to lastMessageAt when otherUserLastActiveAt is absent.
   Widget _lastActiveText(ConversationSummary s) {
     if (s.isOtherUserActive) {
-      return Text(
-        '● active now',
-        style: TextStyle(
-          fontSize: 12,
-          color: oliveLight,
-        ),
-      );
+      return const Text('● active now', style: t.activeNow);
     }
 
     final activeAt = s.otherUserLastActiveAt ?? s.lastMessageAt;
     if (activeAt == null) return const SizedBox.shrink();
 
-    return Text(
-      formatLastActive(activeAt),
-      style: TextStyle(
-        fontSize: 12,
-        color: warmWhite.withValues(alpha: 0.4),
-      ),
-    );
+    return Text(formatLastActive(activeAt), style: t.timestamp);
   }
 }
 
@@ -248,11 +262,7 @@ class _SingleAvatar extends StatelessWidget {
             child: Center(
               child: Text(
                 initial,
-                style: TextStyle(
-                  color: colors.$2,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: t.avatarInitialLarge.copyWith(color: colors.$2),
               ),
             ),
           ),
@@ -279,28 +289,69 @@ class _SingleAvatar extends StatelessWidget {
 class _GroupAvatar extends StatelessWidget {
   final List<User> members;
   final List<String> contactNames;
+  final int deletedMemberCount;
 
-  const _GroupAvatar({required this.members, required this.contactNames});
+  const _GroupAvatar({
+    required this.members,
+    required this.contactNames,
+    this.deletedMemberCount = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final capped = members.take(3).toList();
+    // Cluster of up to 3 faces: active members first, then a deleted-user
+    // treatment (spec §4) for each deleted slot. Order in the cluster carries
+    // no meaning, so a count is enough to place the deleted faces.
+    final minis = <Widget>[];
+    for (var i = 0; i < members.length && minis.length < 3; i++) {
+      minis.add(_MiniAvatar(
+        avatarColor: members[i].avatarColor,
+        contactName: i < contactNames.length ? contactNames[i] : '?',
+      ));
+    }
+    for (var i = 0; i < deletedMemberCount && minis.length < 3; i++) {
+      minis.add(const _DeletedAvatar(size: 28, bordered: true));
+    }
 
     return SizedBox(
       width: 52,
       height: 40,
       child: Stack(
         children: [
-          for (var i = 0; i < capped.length; i++)
+          for (var i = 0; i < minis.length; i++)
             Positioned(
               left: i * 14.0,
               top: i % 2 == 0 ? 0.0 : 8.0,
-              child: _MiniAvatar(
-                avatarColor: capped[i].avatarColor,
-                contactName: i < contactNames.length ? contactNames[i] : '?',
-              ),
+              child: minis[i],
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _DeletedAvatar extends StatelessWidget {
+  final double size;
+  final bool bordered;
+
+  const _DeletedAvatar({required this.size, this.bordered = false});
+
+  @override
+  Widget build(BuildContext context) {
+    // Spec §4 Deleted-User Avatar: a solid warm-white (#FAFAF5) circle with a
+    // charcoal (#1E1D18) dash — no initial, no personal color. A deliberate
+    // "this changed" signal. The border matches _MiniAvatar so a deleted face
+    // reads as part of a group cluster.
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: warmWhite,
+        shape: BoxShape.circle,
+        border: bordered ? Border.all(color: charcoal, width: 1.5) : null,
+      ),
+      child: Center(
+        child: Icon(Icons.remove, color: charcoal, size: size * 0.5),
       ),
     );
   }
@@ -329,11 +380,7 @@ class _MiniAvatar extends StatelessWidget {
       child: Center(
         child: Text(
           initial,
-          style: TextStyle(
-            color: colors.$2,
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-          ),
+          style: t.avatarInitialMini.copyWith(color: colors.$2),
         ),
       ),
     );

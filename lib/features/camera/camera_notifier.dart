@@ -7,9 +7,12 @@ final cameraProvider =
   CameraNotifier.new,
 );
 
-class CameraNotifier extends FamilyNotifier<CameraState, String> {
+class CameraNotifier extends Notifier<CameraState> {
+  CameraNotifier(this.arg);
+  final String arg;
+
   @override
-  CameraState build(String arg) => CameraState(conversationId: arg);
+  CameraState build() => CameraState(conversationId: arg);
 
   Future<void> startRecording() async {}
   Future<void> stopRecording() async {}

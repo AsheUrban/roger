@@ -1,26 +1,19 @@
 enum OnboardingStep {
-  emailEntry,
-  awaitingEmail,
-  phoneNumber,
-  displayName,
-  contactsPermission,
+  phoneEntry,
+  otpVerification,
 }
 
 class OnboardingState {
   final OnboardingStep step;
-  final String email;
   final String phoneNumber;
-  final String displayName;
   final String avatarColor;
   final bool isLoading;
   final String? error;
   final bool onboardingComplete;
 
   const OnboardingState({
-    this.step = OnboardingStep.emailEntry,
-    this.email = '',
+    this.step = OnboardingStep.phoneEntry,
     this.phoneNumber = '',
-    this.displayName = '',
     this.avatarColor = '',
     this.isLoading = false,
     this.error,
@@ -29,9 +22,7 @@ class OnboardingState {
 
   OnboardingState copyWith({
     OnboardingStep? step,
-    String? email,
     String? phoneNumber,
-    String? displayName,
     String? avatarColor,
     bool? isLoading,
     String? Function()? error,
@@ -39,13 +30,33 @@ class OnboardingState {
   }) {
     return OnboardingState(
       step: step ?? this.step,
-      email: email ?? this.email,
       phoneNumber: phoneNumber ?? this.phoneNumber,
-      displayName: displayName ?? this.displayName,
       avatarColor: avatarColor ?? this.avatarColor,
       isLoading: isLoading ?? this.isLoading,
       error: error != null ? error() : this.error,
       onboardingComplete: onboardingComplete ?? this.onboardingComplete,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is OnboardingState &&
+        other.step == step &&
+        other.phoneNumber == phoneNumber &&
+        other.avatarColor == avatarColor &&
+        other.isLoading == isLoading &&
+        other.error == error &&
+        other.onboardingComplete == onboardingComplete;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        step,
+        phoneNumber,
+        avatarColor,
+        isLoading,
+        error,
+        onboardingComplete,
+      );
 }
