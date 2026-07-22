@@ -29,33 +29,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:roger/core/config/env.dart';
 
-const _otp = '123456';
-const _phoneA = '+15550001000';
-const _phoneB = '+15550002000';
-const _phoneC = '+15550003000';
+import 'harness.dart';
+
 const _unknownNumber = '+15555550199'; // not a registered roger user
 const _cap = 20;
-
-/// A fresh SupabaseClient authenticated as [phone], with a guaranteed
-/// public.users account (idempotent). Returns the client and its user id.
-/// (Mirrors the helper in identity_privacy_test.dart — extract to a shared
-/// harness if a third security test needs it.)
-Future<({SupabaseClient client, String userId})> _signIn(
-  String phone,
-  String avatarColor,
-) async {
-  final client = SupabaseClient(Env.supabaseUrl, Env.supabaseAnonKey);
-  await client.auth.signInWithOtp(phone: phone);
-  await client.auth.verifyOTP(phone: phone, token: _otp, type: OtpType.sms);
-  final uid = client.auth.currentUser!.id;
-
-  final existing =
-      await client.from('users').select('id').eq('id', uid).maybeSingle();
-  if (existing == null) {
-    await client.rpc('create_account', params: {'p_avatar_color': avatarColor});
-  }
-  return (client: client, userId: uid);
-}
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -64,8 +41,8 @@ void main() {
   late String bId;
 
   setUpAll(() async {
-    final ra = await _signIn(_phoneA, 'Deep Red');
-    final rb = await _signIn(_phoneB, 'Cornflower');
+    final ra = await signIn(phoneA, 'Deep Red');
+    final rb = await signIn(phoneB, 'Cornflower');
     a = ra.client;
     bId = rb.userId;
     // Only A needs to stay authenticated to call discovery; B just needs to exist.
@@ -78,7 +55,7 @@ void main() {
 
   group('Invariant 4 — single-number discovery, never the address book', () {
     test('a match is returned for an exact registered number', () async {
-      final res = await a.rpc('discover_user', params: {'p_phone': _phoneB});
+      final res = await a.rpc('discover_user', params: {'p_phone': phoneB});
       final rows = res as List;
       expect(rows.length, 1);
       expect(rows.first['user_id'], bId);
@@ -98,7 +75,7 @@ void main() {
   group('Invariant 6 — no enumerable directory, minimal disclosure', () {
     test('a match exposes only user_id / avatar_color / last_active_at',
         () async {
-      final res = await a.rpc('discover_user', params: {'p_phone': _phoneB});
+      final res = await a.rpc('discover_user', params: {'p_phone': phoneB});
       final row = (res as List).first as Map<String, dynamic>;
       expect(row.keys.toSet(), {'user_id', 'avatar_color', 'last_active_at'},
           reason: 'no phone-derived or other fields may leak through discovery');
@@ -109,7 +86,7 @@ void main() {
     test('an unauthenticated (anon) client cannot call discover_user', () async {
       final anon = SupabaseClient(Env.supabaseUrl, Env.supabaseAnonKey);
       await expectLater(
-        anon.rpc('discover_user', params: {'p_phone': _phoneB}),
+        anon.rpc('discover_user', params: {'p_phone': phoneB}),
         throwsA(isA<PostgrestException>()),
         reason: 'discover_user is granted to authenticated only',
       );
@@ -119,7 +96,7 @@ void main() {
   group('Invariant 5 — discovery is rate-limited, not an enumeration oracle',
       () {
     test('the (cap+1)th lookup in a day is rejected', () async {
-      final rc = await _signIn(_phoneC, 'Olive');
+      final rc = await signIn(phoneC, 'Olive');
       final c = rc.client;
       try {
         // Burn the day's allowance (see header caveat on resetting between runs).

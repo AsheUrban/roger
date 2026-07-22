@@ -80,17 +80,15 @@ class AuthService {
     await _client.auth.signOut();
   }
 
+  // Account deletion is handled server-side (delete-account Edge Function,
+  // Settings slice — step 8). It must remove auth.users too, which needs
+  // service_role, and there is deliberately no client DELETE policy on
+  // public.users — so a client-side delete can never work.
   Future<void> deleteAccount() async {
-    final authUser = _client.auth.currentUser;
-    if (authUser == null) return;
-
-    // Delete public.users row — cascades to settings, keys, device tokens
-    await _client.from('users').delete().eq('id', authUser.id);
-
-    // TODO: auth.users entry requires service_role key to delete.
-    // Add a Supabase Edge Function or database trigger to clean up
-    // auth.users when the public.users row is deleted.
-    await _client.auth.signOut();
+    throw UnimplementedError(
+      'Account deletion routes through the delete-account Edge Function '
+      '(step 8).',
+    );
   }
 
   // Phone-number change is handled server-side (Edge Function), not a client write.

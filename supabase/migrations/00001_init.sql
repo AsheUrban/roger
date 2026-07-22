@@ -21,7 +21,7 @@
 --   * pending_invites holds invite_token + invited_phone_hash, never a raw
 --     number.
 --   * discovery_rate_limit backs the per-user discovery cap (enforced in the
---     discovery Edge Function — later slice; cap = 20/day per Spec §18).
+--     discover_user RPC below; cap = 20/day per Spec §18).
 --
 -- OPERATIONAL PREREQUISITE — the discovery pepper (NEVER commit its value):
 --   Seed once, out of band, in the SQL editor:
@@ -175,6 +175,16 @@ create table public.conversation_keys (
 create index idx_conversation_keys_conversation on public.conversation_keys(conversation_id);
 create index idx_conversation_keys_user on public.conversation_keys(user_id);
 
+-- One ACTIVE key row per member per conversation. Key rows are written only
+-- by the distribute_conversation_keys RPC (no client INSERT policy); this
+-- index is the serializer for concurrent initiations — the second distribution
+-- conflicts instead of landing, and the loser adopts the established key.
+-- Rotation retires the old row (retired_at set) before inserting the new one,
+-- so it composes.
+create unique index conversation_keys_one_active_per_member
+  on public.conversation_keys (conversation_id, user_id)
+  where retired_at is null;
+
 -- 11. user_settings
 create table public.user_settings (
   id                     uuid primary key default gen_random_uuid(),
@@ -209,6 +219,18 @@ create table public.discovery_rate_limit (
   day     date not null,
   count   integer not null default 0,
   primary key (user_id, day)
+);
+
+-- 14. conversation_add_limit — per-(adder, addee) rolling-12h-window counter
+--     backing the add cap in create_conversation (spec §9): 5 adds per pair per
+--     12h. The window starts at the first add and resets 12h later. The pair is
+--     stored ONLY as a peppered hash, so this is not a readable who-added-whom
+--     graph even server-side; RLS is on with NO client policies, so no client
+--     can read or write it. Stale rows cleaned up periodically.
+create table public.conversation_add_limit (
+  pair_hash    text primary key,
+  window_start timestamptz not null,
+  count        integer not null
 );
 
 -- ============================================================
@@ -292,9 +314,40 @@ begin
 end;
 $$;
 
+-- Peppered hash of a directed (adder → addee) uuid pair. Reuses the discovery
+-- pepper with an 'add:' domain-separation prefix so it can't be conflated with
+-- phone hashes. Server-side only (not granted to clients). Backs the per-pair
+-- add cap; the counter row stores only this hash, never the raw uuid pair, so
+-- the table is not a readable social graph. Pepper rotation is harmless here —
+-- the counter is transient (30-day), so a reset costs nothing.
+create or replace function public.peppered_pair_hash(p_adder uuid, p_addee uuid)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = public, vault, extensions
+as $$
+declare
+  v_pepper text;
+begin
+  select decrypted_secret into v_pepper
+  from vault.decrypted_secrets
+  where name = 'discovery_pepper'
+  limit 1;
+  if v_pepper is null then
+    raise exception 'discovery_pepper is not configured in Vault';
+  end if;
+  return encode(
+    digest(v_pepper || 'add:' || p_adder::text || ':' || p_addee::text, 'sha256'),
+    'hex');
+end;
+$$;
+
 -- Atomic conversation + memberships creation. Avoids the RLS chicken-and-egg
 -- where a client .select() on the conversation insert would fail before the
 -- caller is a member. Spec §9: groups capped at 5; creator must be a member.
+-- Also enforces the per-(adder, addee) daily add cap (spec §9): a member can be
+-- added to at most v_add_cap conversations per day by the same person.
 create or replace function public.create_conversation(
   p_name text,
   p_member_ids uuid[]
@@ -308,6 +361,10 @@ declare
   v_caller uuid := auth.uid();
   v_conv_id uuid;
   v_now timestamptz := now();
+  v_member uuid;
+  v_add_count integer;
+  v_add_cap constant integer := 5;               -- per addee, per adder
+  v_window constant interval := interval '12 hours';
 begin
   if v_caller is null then
     raise exception 'Not authenticated' using errcode = '42501';
@@ -322,6 +379,30 @@ begin
     raise exception 'Conversation exceeds maximum of 5 members'
       using errcode = '23514';
   end if;
+
+  -- Per-(adder, addee) rolling-window add cap: 5 per pair per 12h. The counter
+  -- resets when its 12h window has elapsed since the first add. Counted per
+  -- pair (stored only as a peppered hash); a rejected creation rolls back these
+  -- increments, so it consumes no allowance and the counter never sits above
+  -- the cap. Blunts single-account add-harassment; multi-account still costs an
+  -- account each.
+  foreach v_member in array p_member_ids loop
+    if v_member <> v_caller then
+      insert into public.conversation_add_limit (pair_hash, window_start, count)
+      values (public.peppered_pair_hash(v_caller, v_member), v_now, 1)
+      on conflict (pair_hash) do update set
+        count = case when v_now - public.conversation_add_limit.window_start >= v_window
+                     then 1 else public.conversation_add_limit.count + 1 end,
+        window_start = case when v_now - public.conversation_add_limit.window_start >= v_window
+                            then v_now else public.conversation_add_limit.window_start end
+      returning count into v_add_count;
+
+      if v_add_count > v_add_cap then
+        raise exception
+          'You''ve added someone to too many conversations recently. Try again later.';
+      end if;
+    end if;
+  end loop;
 
   insert into public.conversations (name, created_at)
   values (p_name, v_now)
@@ -370,6 +451,74 @@ begin
   values (v_caller, v_now, v_now);
 
   return v_caller;
+end;
+$$;
+
+-- Initial conversation-key distribution (spec §7): the initiating device
+-- writes one wrapped key row per active member, atomically, through this RPC —
+-- the ONLY write path into conversation_keys (no client INSERT policy).
+-- Refusing to run when any active key row exists closes first-write poisoning
+-- (a member pre-planting a garbage row for a victim before the real key
+-- lands); requiring the set to cover exactly the active members prevents a
+-- partial distribution from locking anyone out. Key ROTATION (retire + new
+-- rows) is step-10 work and gets its own policy decision there.
+create or replace function public.distribute_conversation_keys(
+  p_conversation_id uuid,
+  p_keys jsonb  -- [{"user_id": "...", "encrypted_conversation_key": "..."}, ...]
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller uuid := auth.uid();
+  v_member_count integer;
+  v_valid_key_count integer;
+  v_total_key_count integer;
+begin
+  if v_caller is null then
+    raise exception 'Not authenticated' using errcode = '42501';
+  end if;
+
+  if not public.is_conversation_member(p_conversation_id) then
+    raise exception 'Not a member of this conversation' using errcode = '42501';
+  end if;
+
+  -- Initial distribution only: refuse if ANY active key row exists.
+  if exists (
+    select 1 from public.conversation_keys
+    where conversation_id = p_conversation_id and retired_at is null
+  ) then
+    raise exception 'Conversation already has an active key' using errcode = '23505';
+  end if;
+
+  select count(*) into v_member_count
+  from public.conversation_members
+  where conversation_id = p_conversation_id
+    and left_at is null and user_id is not null;
+
+  select count(distinct k->>'user_id') into v_valid_key_count
+  from jsonb_array_elements(p_keys) k
+  join public.conversation_members m
+    on m.user_id = (k->>'user_id')::uuid
+   and m.conversation_id = p_conversation_id
+   and m.left_at is null;
+
+  select count(*) into v_total_key_count from jsonb_array_elements(p_keys);
+
+  -- Exactly the active member set: no extras, no gaps, no duplicates.
+  if v_valid_key_count <> v_member_count
+     or v_total_key_count <> v_member_count then
+    raise exception 'Key set must cover exactly the active members'
+      using errcode = '23514';
+  end if;
+
+  insert into public.conversation_keys
+    (conversation_id, user_id, encrypted_conversation_key)
+  select p_conversation_id, (k->>'user_id')::uuid,
+         k->>'encrypted_conversation_key'
+  from jsonb_array_elements(p_keys) k;
 end;
 $$;
 
@@ -447,6 +596,13 @@ create policy "users: update own"
   to authenticated
   using (id = auth.uid())
   with check (id = auth.uid());
+
+-- Column-restricted like user_private: avatar_color is the only client-writable
+-- column. Keeps a modified client from spoofing last_active_at (forcing the
+-- presence dot / call pill for conversation-mates) or rewriting created_at.
+-- Step 9's presence writer extends this grant to last_active_at deliberately.
+revoke update on public.users from authenticated;
+grant update (avatar_color) on public.users to authenticated;
 
 -- 1b. user_private — self-only. No client INSERT (create_account RPC only).
 --     Client UPDATE is column-restricted to recovery_email (phone_hash is
@@ -553,10 +709,20 @@ create policy "message_views: select for members"
     )
   );
 
+-- Own rows only, and only against messages in conversations the caller
+-- belongs to — matching the other content tables, and protecting the future
+-- "all members downloaded → R2 purge" threshold from seeded rows.
 create policy "message_views: insert own"
   on public.message_views for insert
   to authenticated
-  with check (user_id = auth.uid());
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.messages m
+      where m.id = message_id
+        and public.is_conversation_member(m.conversation_id)
+    )
+  );
 
 create policy "message_views: update own"
   on public.message_views for update
@@ -683,13 +849,11 @@ create policy "conversation_keys: select own"
   to authenticated
   using (user_id = auth.uid());
 
-create policy "conversation_keys: insert for members"
-  on public.conversation_keys for insert
-  to authenticated
-  with check (
-    public.is_conversation_member(conversation_id)
-    and user_id = auth.uid()
-  );
+-- No client INSERT policy: key rows are written only through the
+-- distribute_conversation_keys RPC (SECURITY DEFINER), which enforces
+-- initial-distribution-only + exact-member-set coverage. A direct insert —
+-- including a first-write pre-planted to poison a member's key lookup — is
+-- rejected by RLS.
 
 create policy "conversation_keys: update own"
   on public.conversation_keys for update
@@ -740,15 +904,21 @@ create policy "device_tokens: delete own"
   to authenticated
   using (user_id = auth.uid());
 
--- 13. discovery_rate_limit — RLS on, NO client policies. Only the discovery
---     Edge Function (SECURITY DEFINER / service path) touches it; clients can
---     never read or write the per-user counters directly.
+-- 13. discovery_rate_limit — RLS on, NO client policies. Only the discover_user
+--     RPC (SECURITY DEFINER) touches it; clients can never read or write the
+--     per-user counters directly.
 alter table public.discovery_rate_limit enable row level security;
 
+-- 14. conversation_add_limit — RLS on, NO client policies. Only
+--     create_conversation (SECURITY DEFINER) touches it; the peppered pair
+--     counters are never client-readable or writable.
+alter table public.conversation_add_limit enable row level security;
+
 -- ============================================================
--- GRANTS — only the two client-callable RPCs. peppered_phone_hash is NOT
--- granted (server-side hashing only).
+-- GRANTS — only the client-callable RPCs. peppered_phone_hash is NOT granted
+-- (server-side hashing only).
 -- ============================================================
 grant execute on function public.create_conversation(text, uuid[]) to authenticated;
 grant execute on function public.create_account(text) to authenticated;
 grant execute on function public.discover_user(text) to authenticated;
+grant execute on function public.distribute_conversation_keys(uuid, jsonb) to authenticated;

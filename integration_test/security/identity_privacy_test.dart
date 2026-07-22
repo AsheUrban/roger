@@ -22,36 +22,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:roger/core/config/env.dart';
-
-const _otp = '123456';
-const _phoneA = '+15550001000';
-const _phoneB = '+15550002000';
-
-/// A fresh SupabaseClient authenticated as [phone], with a guaranteed
-/// public.users account (idempotent). Returns the client and its user id.
-Future<({SupabaseClient client, String userId})> _signIn(
-  String phone,
-  String avatarColor,
-) async {
-  final client = SupabaseClient(Env.supabaseUrl, Env.supabaseAnonKey);
-  await client.auth.signInWithOtp(phone: phone);
-  await client.auth.verifyOTP(phone: phone, token: _otp, type: OtpType.sms);
-  final uid = client.auth.currentUser!.id;
-
-  // Self-read survives the narrowed RLS (the "self" clause). Create the account
-  // through the RPC only if it doesn't exist yet.
-  final existing =
-      await client.from('users').select('id').eq('id', uid).maybeSingle();
-  if (existing == null) {
-    // create_account reads the verified phone from auth.users itself; the
-    // client only supplies the avatar color.
-    await client.rpc('create_account', params: {
-      'p_avatar_color': avatarColor,
-    });
-  }
-  return (client: client, userId: uid);
-}
+import 'harness.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -62,8 +33,8 @@ void main() {
   late String bId;
 
   setUpAll(() async {
-    final ra = await _signIn(_phoneA, 'Deep Red');
-    final rb = await _signIn(_phoneB, 'Cornflower');
+    final ra = await signIn(phoneA, 'Deep Red');
+    final rb = await signIn(phoneB, 'Cornflower');
     a = ra.client;
     aId = ra.userId;
     b = rb.client;
