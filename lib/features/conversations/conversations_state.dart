@@ -89,22 +89,32 @@ class ConversationsState {
   final List<ConversationSummary> conversations;
   final bool isLoading;
   final String? error;
+  // Bulk-leave multi-select (spec §9). When on, rows toggle selection instead
+  // of navigating, and a leave bar acts on `selectedIds`.
+  final bool isSelectionMode;
+  final Set<String> selectedIds;
 
   const ConversationsState({
     this.conversations = const [],
     this.isLoading = false,
     this.error,
+    this.isSelectionMode = false,
+    this.selectedIds = const {},
   });
 
   ConversationsState copyWith({
     List<ConversationSummary>? conversations,
     bool? isLoading,
     String? Function()? error,
+    bool? isSelectionMode,
+    Set<String>? selectedIds,
   }) {
     return ConversationsState(
       conversations: conversations ?? this.conversations,
       isLoading: isLoading ?? this.isLoading,
       error: error != null ? error() : this.error,
+      isSelectionMode: isSelectionMode ?? this.isSelectionMode,
+      selectedIds: selectedIds ?? this.selectedIds,
     );
   }
 
@@ -114,7 +124,9 @@ class ConversationsState {
     return other is ConversationsState &&
         listEquals(other.conversations, conversations) &&
         other.isLoading == isLoading &&
-        other.error == error;
+        other.error == error &&
+        other.isSelectionMode == isSelectionMode &&
+        setEquals(other.selectedIds, selectedIds);
   }
 
   @override
@@ -122,5 +134,7 @@ class ConversationsState {
         Object.hashAll(conversations),
         isLoading,
         error,
+        isSelectionMode,
+        Object.hashAllUnordered(selectedIds),
       );
 }

@@ -210,6 +210,57 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
 
   Future<void> refreshConversations() => loadConversations();
 
+  /// Leave a group conversation (spec §9) and drop it from the list
+  /// immediately.
+  Future<void> leaveConversation(String conversationId) =>
+      _leaveAll({conversationId});
+
+  // ── Bulk-leave multi-select (spec §9) ────────────────────────────────────
+
+  void enterSelectionMode() {
+    state = state.copyWith(isSelectionMode: true, selectedIds: {});
+  }
+
+  void exitSelectionMode() {
+    state = state.copyWith(isSelectionMode: false, selectedIds: {});
+  }
+
+  void toggleSelected(String conversationId) {
+    final next = Set<String>.from(state.selectedIds);
+    if (!next.add(conversationId)) next.remove(conversationId);
+    state = state.copyWith(selectedIds: next);
+  }
+
+  /// Leave every currently-selected conversation, then exit selection mode.
+  Future<void> leaveSelected() async {
+    if (state.selectedIds.isEmpty) return;
+    await _leaveAll(state.selectedIds);
+    if (!ref.mounted) return;
+    state = state.copyWith(isSelectionMode: false, selectedIds: {});
+  }
+
+  /// Leaves each conversation via the service, then drops them all from the
+  /// list in one update. Reads the service fresh via ref (not a build-cached
+  /// field) so it works in seed-override unit tests, matching onNewMessage.
+  Future<void> _leaveAll(Set<String> ids) async {
+    final currentUserId = ref.read(currentUserIdProvider);
+    if (currentUserId == null || ids.isEmpty) return;
+
+    final service = ref.read(conversationServiceProvider);
+    for (final id in ids) {
+      await service.leaveGroup(
+        conversationId: id,
+        currentUserId: currentUserId,
+      );
+    }
+    if (!ref.mounted) return;
+    state = state.copyWith(
+      conversations: state.conversations
+          .where((s) => !ids.contains(s.conversation.id))
+          .toList(),
+    );
+  }
+
   /// Pure state mutation — reads currentUserId fresh via ref so this method
   /// works correctly in unit tests without storing state from build().
   void onNewMessage({

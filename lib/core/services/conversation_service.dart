@@ -62,4 +62,19 @@ class ConversationService {
 
     return createConversation(memberIds: [currentUserId, otherUserId]);
   }
+
+  /// Leave a group conversation (spec §9): sets `left_at` on the caller's own
+  /// membership row so future messages no longer reach them. Their prior
+  /// messages stay for the remaining members and roll off naturally. The
+  /// "update own" RLS policy (`user_id = auth.uid()`) permits exactly this.
+  Future<void> leaveGroup({
+    required String conversationId,
+    required String currentUserId,
+  }) async {
+    await _client
+        .from('conversation_members')
+        .update({'left_at': DateTime.now().toUtc().toIso8601String()})
+        .eq('conversation_id', conversationId)
+        .eq('user_id', currentUserId);
+  }
 }

@@ -7,11 +7,13 @@ import 'package:roger/core/models/conversation.dart';
 import 'package:roger/core/models/user.dart';
 import 'package:roger/core/providers.dart';
 import 'package:roger/core/services/contacts_service.dart';
+import 'package:roger/core/services/conversation_service.dart';
 import 'package:roger/features/conversations/conversations_notifier.dart';
 import 'package:roger/features/conversations/conversations_state.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 class MockContactsService extends Mock implements ContactsService {}
+class MockConversationService extends Mock implements ConversationService {}
 class MockSupabaseClient extends Mock implements SupabaseClient {}
 
 AppDatabase _makeInMemoryDatabase() =>
@@ -53,10 +55,12 @@ ConversationSummary _makeSummary({
 
 void main() {
   late MockContactsService contactsService;
+  late MockConversationService conversationService;
   late AppDatabase appDatabase;
 
   setUp(() {
     contactsService = MockContactsService();
+    conversationService = MockConversationService();
     appDatabase = _makeInMemoryDatabase();
   });
 
@@ -68,6 +72,7 @@ void main() {
         if (seed != null)
           conversationsProvider.overrideWithBuild((ref, self) => seed),
         contactsServiceProvider.overrideWithValue(contactsService),
+        conversationServiceProvider.overrideWithValue(conversationService),
         supabaseClientProvider.overrideWithValue(MockSupabaseClient()),
         currentUserIdProvider.overrideWithValue('current-user-id'),
         appDatabaseProvider.overrideWithValue(appDatabase),
@@ -220,6 +225,108 @@ void main() {
         final conv2 = conversations.firstWhere((c) => c.conversation.id == 'conv-2');
         expect(conv2.hasUnread, false);
         expect(conv2.displayName, 'Conv Two');
+      });
+    });
+
+    group('leaveConversation', () {
+      test('leaves the group via the service and drops it from the list',
+          () async {
+        final seed = ConversationsState(
+          conversations: [
+            _makeSummary(conversation: _conv1, displayName: 'Keep'),
+            _makeSummary(conversation: _conv2, displayName: 'Leave'),
+          ],
+        );
+        when(() => conversationService.leaveGroup(
+              conversationId: any(named: 'conversationId'),
+              currentUserId: any(named: 'currentUserId'),
+            )).thenAnswer((_) async {});
+
+        final container = makeContainer(seed: seed);
+        await container
+            .read(conversationsProvider.notifier)
+            .leaveConversation('conv-2');
+
+        verify(() => conversationService.leaveGroup(
+              conversationId: 'conv-2',
+              currentUserId: 'current-user-id',
+            )).called(1);
+        final ids = container
+            .read(conversationsProvider)
+            .conversations
+            .map((s) => s.conversation.id);
+        expect(ids, ['conv-1']);
+      });
+    });
+
+    group('bulk-leave selection', () {
+      ConversationsState twoConvos() => ConversationsState(
+            conversations: [
+              _makeSummary(conversation: _conv1, displayName: 'One'),
+              _makeSummary(conversation: _conv2, displayName: 'Two'),
+            ],
+          );
+
+      test('enter / toggle / exit selection mode', () {
+        final container = makeContainer(seed: twoConvos());
+        final notifier = container.read(conversationsProvider.notifier);
+
+        notifier.enterSelectionMode();
+        expect(container.read(conversationsProvider).isSelectionMode, true);
+
+        notifier.toggleSelected('conv-1');
+        notifier.toggleSelected('conv-2');
+        expect(container.read(conversationsProvider).selectedIds,
+            {'conv-1', 'conv-2'});
+
+        notifier.toggleSelected('conv-1'); // deselect
+        expect(container.read(conversationsProvider).selectedIds, {'conv-2'});
+
+        notifier.exitSelectionMode();
+        expect(container.read(conversationsProvider).isSelectionMode, false);
+        expect(container.read(conversationsProvider).selectedIds, isEmpty);
+      });
+
+      test('leaveSelected leaves each selected group, drops them, exits mode',
+          () async {
+        when(() => conversationService.leaveGroup(
+              conversationId: any(named: 'conversationId'),
+              currentUserId: any(named: 'currentUserId'),
+            )).thenAnswer((_) async {});
+
+        final container = makeContainer(seed: twoConvos());
+        final notifier = container.read(conversationsProvider.notifier);
+        notifier.enterSelectionMode();
+        notifier.toggleSelected('conv-1');
+        notifier.toggleSelected('conv-2');
+
+        await notifier.leaveSelected();
+
+        verify(() => conversationService.leaveGroup(
+              conversationId: 'conv-1',
+              currentUserId: 'current-user-id',
+            )).called(1);
+        verify(() => conversationService.leaveGroup(
+              conversationId: 'conv-2',
+              currentUserId: 'current-user-id',
+            )).called(1);
+        expect(container.read(conversationsProvider).conversations, isEmpty);
+        expect(container.read(conversationsProvider).isSelectionMode, false);
+      });
+
+      test('leaveSelected with nothing selected is a no-op', () async {
+        final container = makeContainer(seed: twoConvos());
+        final notifier = container.read(conversationsProvider.notifier);
+        notifier.enterSelectionMode();
+
+        await notifier.leaveSelected();
+
+        verifyNever(() => conversationService.leaveGroup(
+              conversationId: any(named: 'conversationId'),
+              currentUserId: any(named: 'currentUserId'),
+            ));
+        expect(
+            container.read(conversationsProvider).conversations.length, 2);
       });
     });
 

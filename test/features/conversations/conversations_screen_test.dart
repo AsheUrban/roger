@@ -483,9 +483,110 @@ void main() {
       });
     });
 
+    group('bulk-leave selection mode', () {
+      ConversationsState twoConvos({bool selectionMode = false, Set<String>? selected}) =>
+          ConversationsState(
+            conversations: [
+              _makeSummary(id: 'conv-1', displayName: 'Alpha'),
+              _makeSummary(id: 'conv-2', displayName: 'Beta'),
+            ],
+            isSelectionMode: selectionMode,
+            selectedIds: selected ?? const {},
+          );
+
+      testWidgets('a select toggle is shown, and no leave bar until in mode',
+          (tester) async {
+        await tester.pumpWidget(_buildWithFakeState(state: twoConvos()));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('select-mode-toggle')), findsOneWidget);
+        expect(find.byKey(const Key('leave-selected-bar')), findsNothing);
+      });
+
+      testWidgets('selection mode shows the leave bar with the selected count',
+          (tester) async {
+        await tester.pumpWidget(_buildWithFakeState(
+          state: twoConvos(selectionMode: true, selected: {'conv-1'}),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('leave-selected-bar')), findsOneWidget);
+        expect(find.textContaining('1'), findsWidgets);
+      });
+
+      testWidgets('tapping a row in selection mode toggles it instead of '
+          'navigating', (tester) async {
+        final notifier = _RecordingConversationsNotifier(
+            twoConvos(selectionMode: true));
+        await tester.pumpWidget(_buildWithNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Alpha'));
+        await tester.pumpAndSettle();
+
+        expect(notifier.toggled, ['conv-1']);
+        // Did not navigate to Camera — still on the list.
+        expect(find.textContaining('camera:'), findsNothing);
+      });
+
+      testWidgets('Leave asks for confirmation, then calls leaveSelected',
+          (tester) async {
+        final notifier = _RecordingConversationsNotifier(
+            twoConvos(selectionMode: true, selected: {'conv-1', 'conv-2'}));
+        await tester.pumpWidget(_buildWithNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('leave-selected-button')));
+        await tester.pumpAndSettle();
+        // Confirmation dialog before any leave (spec §9).
+        expect(notifier.leftSelected, 0);
+        await tester.tap(find.byKey(const Key('confirm-leave')));
+        await tester.pumpAndSettle();
+
+        expect(notifier.leftSelected, 1);
+      });
+    });
+
     group('nav bar', () {
       test('nav bar visible with Conversations tab active',
           skip: 'Integration test — requires full shell route', () {});
     });
   });
+}
+
+// Records notifier interactions for selection-mode interaction tests.
+class _RecordingConversationsNotifier extends ConversationsNotifier {
+  final ConversationsState _state;
+  final List<String> toggled = [];
+  int leftSelected = 0;
+  _RecordingConversationsNotifier(this._state);
+
+  @override
+  ConversationsState build() => _state;
+
+  @override
+  void toggleSelected(String id) => toggled.add(id);
+
+  @override
+  Future<void> leaveSelected() async => leftSelected++;
+}
+
+Widget _buildWithNotifier(_RecordingConversationsNotifier notifier) {
+  final router = GoRouter(
+    initialLocation: '/conversations',
+    routes: [
+      GoRoute(
+        path: '/conversations',
+        builder: (_, _) => const ConversationsScreen(),
+      ),
+      GoRoute(
+        path: '/camera/:conversationId',
+        builder: (_, s) => Text('camera:${s.pathParameters['conversationId']}'),
+      ),
+    ],
+  );
+  return ProviderScope(
+    overrides: [conversationsProvider.overrideWith(() => notifier)],
+    child: MaterialApp.router(routerConfig: router),
+  );
 }

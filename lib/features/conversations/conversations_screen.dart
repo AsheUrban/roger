@@ -23,10 +23,39 @@ class ConversationsScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header
+            // Header — wordmark, plus a select toggle for bulk-leave. In
+            // selection mode it becomes "N selected" + Cancel.
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-              child: Text('roger', style: t.wordmarkHeader),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    state.isSelectionMode
+                        ? '${state.selectedIds.length} selected'
+                        : 'roger',
+                    style: state.isSelectionMode
+                        ? t.screenTitle
+                        : t.wordmarkHeader,
+                  ),
+                  if (state.isSelectionMode)
+                    GestureDetector(
+                      onTap: ref
+                          .read(conversationsProvider.notifier)
+                          .exitSelectionMode,
+                      child: Text('Cancel', style: t.bodySubdued),
+                    )
+                  else if (state.conversations.isNotEmpty)
+                    IconButton(
+                      key: const Key('select-mode-toggle'),
+                      onPressed: ref
+                          .read(conversationsProvider.notifier)
+                          .enterSelectionMode,
+                      icon: Icon(Icons.checklist,
+                          color: warmWhite.withValues(alpha: 0.6), size: 22),
+                    ),
+                ],
+              ),
             ),
 
             // Body
@@ -56,11 +85,16 @@ class ConversationsScreen extends ConsumerWidget {
                           ),
                           itemBuilder: (context, index) {
                             final summary = state.conversations[index];
+                            final id = summary.conversation.id;
+                            final notifier =
+                                ref.read(conversationsProvider.notifier);
                             return _ConversationRow(
                               summary: summary,
-                              onTap: () => context.go(
-                                '/camera/${summary.conversation.id}',
-                              ),
+                              selectionMode: state.isSelectionMode,
+                              selected: state.selectedIds.contains(id),
+                              onTap: state.isSelectionMode
+                                  ? () => notifier.toggleSelected(id)
+                                  : () => context.go('/camera/$id'),
                             );
                           },
                         ),
@@ -76,10 +110,19 @@ class ConversationsScreen extends ConsumerWidget {
                   textAlign: TextAlign.center,
                 ),
               ),
+
+            // Bulk-leave bar (selection mode).
+            if (state.isSelectionMode)
+              _LeaveSelectedBar(
+                count: state.selectedIds.length,
+                onLeave: () => _confirmLeave(context, ref, state.selectedIds.length),
+              ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: state.isSelectionMode
+          ? null
+          : FloatingActionButton(
         onPressed: () {
           showModalBottomSheet(
             context: context,
@@ -125,11 +168,87 @@ class ConversationsScreen extends ConsumerWidget {
   }
 }
 
+/// Confirmation before a bulk leave (spec §9 requires a confirm step), then
+/// leaves the selected conversations.
+Future<void> _confirmLeave(BuildContext context, WidgetRef ref, int count) async {
+  final title =
+      count == 1 ? 'Leave this conversation?' : 'Leave $count conversations?';
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: charcoal2,
+      title: Text(title, style: t.rowName),
+      content: Text(
+        // Spec §9 leave copy.
+        "You'll lose access and won't receive new messages. To rejoin, "
+        'someone would need to add you to a new group.',
+        style: t.bodySubdued,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: Text('Cancel', style: t.bodySubdued),
+        ),
+        TextButton(
+          key: const Key('confirm-leave'),
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: Text('Leave', style: t.bodyText.copyWith(color: destructive)),
+        ),
+      ],
+    ),
+  );
+  if (confirmed == true) {
+    await ref.read(conversationsProvider.notifier).leaveSelected();
+  }
+}
+
+class _LeaveSelectedBar extends StatelessWidget {
+  final int count;
+  final VoidCallback onLeave;
+
+  const _LeaveSelectedBar({required this.count, required this.onLeave});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('leave-selected-bar'),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: charcoal2,
+        border: Border(top: BorderSide(color: t.listDividerColor)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text('$count selected', style: t.bodyDimmed),
+          TextButton(
+            key: const Key('leave-selected-button'),
+            onPressed: count > 0 ? onLeave : null,
+            child: Text(
+              'Leave',
+              style: t.rowName.copyWith(
+                color: count > 0 ? destructive : destructive.withValues(alpha: 0.4),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ConversationRow extends StatelessWidget {
   final ConversationSummary summary;
   final VoidCallback onTap;
+  final bool selectionMode;
+  final bool selected;
 
-  const _ConversationRow({required this.summary, required this.onTap});
+  const _ConversationRow({
+    required this.summary,
+    required this.onTap,
+    this.selectionMode = false,
+    this.selected = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -141,10 +260,19 @@ class _ConversationRow extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
         child: Row(
           children: [
+            if (selectionMode) ...[
+              Icon(
+                selected ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: selected ? warmWhite : warmWhite.withValues(alpha: 0.3),
+                size: 22,
+              ),
+              const SizedBox(width: 12),
+            ],
             // Avatar area
             if (isGroup)
               _GroupAvatar(
