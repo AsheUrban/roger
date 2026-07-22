@@ -9,6 +9,13 @@ String formatLastActive(DateTime lastActive) {
   return 'active ${diff.inDays}d ago';
 }
 
+/// "0:07", "14:59" — elapsed-time label for the recording timer (Camera).
+String formatElapsed(Duration elapsed) {
+  final minutes = elapsed.inMinutes;
+  final seconds = elapsed.inSeconds % 60;
+  return '$minutes:${seconds.toString().padLeft(2, '0')}';
+}
+
 /// "now", "5m", "2h", "yesterday", "3d" — compact labels for conversation row timestamps.
 String formatShortAge(DateTime time) {
   final diff = DateTime.now().difference(time);

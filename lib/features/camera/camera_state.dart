@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart';
+
 import '../../core/models/message.dart';
+import '../../core/models/note_payload.dart';
 
 enum CameraMode { preview, recording, playback, noteComposer }
 
@@ -8,7 +11,13 @@ class CameraState {
   final bool isFrontCamera;
   final bool isOtherUserActive;
   final bool isCallActive;
+  // The conversation's messages, ascending by created_at (newest renders
+  // rightmost in the strip, per §3).
   final List<Message> thumbnails;
+  // Decrypted note content per message id. Decryption happens once as messages
+  // arrive; a note missing from this map failed to decrypt (viewer shows an
+  // error state instead of content).
+  final Map<String, NotePayload> notePayloads;
   final Message? activeMessage;
   final double playbackSpeed;
   final bool isMuted;
@@ -24,6 +33,7 @@ class CameraState {
     this.isOtherUserActive = false,
     this.isCallActive = false,
     this.thumbnails = const [],
+    this.notePayloads = const {},
     this.activeMessage,
     this.playbackSpeed = 1.0,
     this.isMuted = false,
@@ -40,6 +50,7 @@ class CameraState {
     bool? isOtherUserActive,
     bool? isCallActive,
     List<Message>? thumbnails,
+    Map<String, NotePayload>? notePayloads,
     Message? Function()? activeMessage,
     double? playbackSpeed,
     bool? isMuted,
@@ -55,6 +66,7 @@ class CameraState {
       isOtherUserActive: isOtherUserActive ?? this.isOtherUserActive,
       isCallActive: isCallActive ?? this.isCallActive,
       thumbnails: thumbnails ?? this.thumbnails,
+      notePayloads: notePayloads ?? this.notePayloads,
       activeMessage:
           activeMessage != null ? activeMessage() : this.activeMessage,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
@@ -75,7 +87,8 @@ class CameraState {
         other.isFrontCamera == isFrontCamera &&
         other.isOtherUserActive == isOtherUserActive &&
         other.isCallActive == isCallActive &&
-        other.thumbnails == thumbnails &&
+        listEquals(other.thumbnails, thumbnails) &&
+        mapEquals(other.notePayloads, notePayloads) &&
         other.activeMessage == activeMessage &&
         other.playbackSpeed == playbackSpeed &&
         other.isMuted == isMuted &&
@@ -92,7 +105,9 @@ class CameraState {
         isFrontCamera,
         isOtherUserActive,
         isCallActive,
-        thumbnails,
+        Object.hashAll(thumbnails),
+        Object.hashAllUnordered(
+            notePayloads.entries.map((e) => Object.hash(e.key, e.value))),
         activeMessage,
         playbackSpeed,
         isMuted,

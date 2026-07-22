@@ -1,10 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:roger/core/models/message.dart';
+import 'package:roger/core/models/note_payload.dart';
 import 'package:roger/features/camera/camera_state.dart';
 
-// Camera 6a adds copyWith (the notifier's record/flip transitions need it).
-// Equality contracts (equal-when-fields-match, not-equal-when-any-differs)
-// were already covered; the copyWith contract is added below.
+// Camera 6a added copyWith (the notifier's record/flip transitions need it).
+// Camera 6b-3 adds `notePayloads` (decrypted note content per message id) and
+// completes the deferred content-equality contract: `Message.==` now exists, so
+// `thumbnails` compares by listEquals and `notePayloads` by mapEquals — same
+// treatment the other state classes got in the Riverpod 3 cleanup.
 
 CameraState _state({
   String conversationId = 'conv-1',
@@ -13,6 +16,7 @@ CameraState _state({
   bool isOtherUserActive = false,
   bool isCallActive = false,
   List<Message>? thumbnails,
+  Map<String, NotePayload>? notePayloads,
   Message? activeMessage,
   double playbackSpeed = 1.0,
   bool isMuted = false,
@@ -28,6 +32,7 @@ CameraState _state({
     isOtherUserActive: isOtherUserActive,
     isCallActive: isCallActive,
     thumbnails: thumbnails ?? const <Message>[],
+    notePayloads: notePayloads ?? const <String, NotePayload>{},
     activeMessage: activeMessage,
     playbackSpeed: playbackSpeed,
     isMuted: isMuted,
@@ -37,6 +42,15 @@ CameraState _state({
     error: error,
   );
 }
+
+Message _note(String id) => Message(
+      id: id,
+      conversationId: 'conv-1',
+      senderId: 'u-1',
+      type: MessageType.note,
+      encryptedText: 'cipher-$id',
+      createdAt: DateTime(2026, 7, 22),
+    );
 
 void main() {
   group('CameraState equality', () {
@@ -109,34 +123,43 @@ void main() {
           isNot(equals(_state(isCallActive: true))));
     });
 
-    test('not equal when thumbnails differ (different list identity)', () {
-      final later = DateTime(2026, 4, 8);
-      final message = Message(
-        id: 'm-1',
-        conversationId: 'conv-1',
-        senderId: 'u-1',
-        type: MessageType.note,
-        r2ExpiresAt: later,
-        createdAt: later,
-      );
+    test('not equal when thumbnails differ in content', () {
       expect(
         _state(thumbnails: const []),
-        isNot(equals(_state(thumbnails: [message]))),
+        isNot(equals(_state(thumbnails: [_note('m-1')]))),
       );
     });
 
-    test('not equal when activeMessage differs (different identity)', () {
-      final later = DateTime(2026, 4, 8);
-      final message = Message(
-        id: 'm-1',
-        conversationId: 'conv-1',
-        senderId: 'u-1',
-        type: MessageType.note,
-        r2ExpiresAt: later,
-        createdAt: later,
+    test('equal when thumbnails have the same content but different list '
+        'identity (Message.== + listEquals)', () {
+      final a = _state(thumbnails: [_note('m-1'), _note('m-2')]);
+      final b = _state(thumbnails: [_note('m-1'), _note('m-2')]);
+      expect(a, equals(b));
+      expect(a.hashCode, equals(b.hashCode));
+    });
+
+    test('not equal when notePayloads differ in content', () {
+      const payload = NotePayload(
+          text: 'hi', backgroundColor: 0xFF000000, textColor: 0xFFFFFFFF);
+      expect(
+        _state(notePayloads: const {}),
+        isNot(equals(_state(notePayloads: const {'m-1': payload}))),
       );
+    });
+
+    test('equal when notePayloads have the same content but different map '
+        'identity', () {
+      const payload = NotePayload(
+          text: 'hi', backgroundColor: 0xFF000000, textColor: 0xFFFFFFFF);
+      final a = _state(notePayloads: {'m-1': payload});
+      final b = _state(notePayloads: {'m-1': payload});
+      expect(a, equals(b));
+      expect(a.hashCode, equals(b.hashCode));
+    });
+
+    test('not equal when activeMessage differs', () {
       expect(_state(activeMessage: null),
-          isNot(equals(_state(activeMessage: message))));
+          isNot(equals(_state(activeMessage: _note('m-1')))));
     });
 
     test('not equal when playbackSpeed differs', () {

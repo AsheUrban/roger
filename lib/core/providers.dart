@@ -8,6 +8,9 @@ import 'services/auth_service.dart';
 import 'services/contacts_service.dart';
 import 'services/conversation_service.dart';
 import 'services/database_key_service.dart';
+import 'services/encryption_service.dart';
+import 'services/key_service.dart';
+import 'services/message_service.dart';
 import 'services/share_service.dart';
 
 final authServiceProvider = Provider<AuthService>(
@@ -20,6 +23,17 @@ final conversationServiceProvider = Provider<ConversationService>(
   (ref) => ConversationService(client: ref.read(supabaseClientProvider)),
 );
 final shareServiceProvider = Provider<ShareService>((ref) => ShareService());
+final encryptionServiceProvider =
+    Provider<EncryptionService>((ref) => EncryptionService());
+final keyServiceProvider = Provider<KeyService>(
+  (ref) => KeyService(
+    client: ref.read(supabaseClientProvider),
+    encryption: ref.read(encryptionServiceProvider),
+  ),
+);
+final messageServiceProvider = Provider<MessageService>(
+  (ref) => MessageService(client: ref.read(supabaseClientProvider)),
+);
 final randomProvider = Provider<Random>((ref) => Random());
 
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {

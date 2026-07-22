@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:roger/core/models/conversation.dart';
+import 'package:roger/core/models/message.dart';
+import 'package:roger/core/models/note_payload.dart';
 import 'package:roger/core/models/user.dart';
+import 'package:roger/core/theme/colors.dart';
 import 'package:roger/features/camera/camera_notifier.dart';
 import 'package:roger/features/camera/camera_screen.dart';
 import 'package:roger/features/camera/camera_state.dart';
@@ -28,6 +31,11 @@ class _FakeCameraNotifier extends CameraNotifier {
   int flipCalls = 0;
   int photoCalls = 0;
   int noteCalls = 0;
+  int exitComposerCalls = 0;
+  int closePlaybackCalls = 0;
+  final List<String> selectedThumbnails = [];
+  final List<({String text, int backgroundColor, int textColor})> sentNotes =
+      [];
 
   @override
   CameraState build() => _state;
@@ -46,6 +54,25 @@ class _FakeCameraNotifier extends CameraNotifier {
 
   @override
   void enterNoteComposer() => noteCalls++;
+
+  @override
+  void exitNoteComposer() => exitComposerCalls++;
+
+  @override
+  Future<void> sendNote({
+    required String text,
+    required int backgroundColor,
+    required int textColor,
+  }) async {
+    sentNotes.add(
+        (text: text, backgroundColor: backgroundColor, textColor: textColor));
+  }
+
+  @override
+  void selectThumbnail(String messageId) => selectedThumbnails.add(messageId);
+
+  @override
+  void closePlayback() => closePlaybackCalls++;
 }
 
 ConversationSummary _summary({
@@ -270,6 +297,266 @@ void main() {
       });
     });
 
+    // ── Note composer (6b) ───────────────────────────────────────────────────
+    group('note composer', () {
+      const composing =
+          CameraState(conversationId: _convId, mode: CameraMode.noteComposer);
+
+      testWidgets(
+          'replaces the camera view with a text canvas — feed and camera '
+          'controls gone, header and thumbnail strip stay', (tester) async {
+        await tester.pumpWidget(_render(composing, summary: _summary()));
+
+        expect(find.byKey(const Key('note-canvas')), findsOneWidget);
+        expect(find.byKey(const Key('note-input')), findsOneWidget);
+        expect(find.byKey(const Key('camera-record')), findsNothing);
+        expect(find.byKey(const Key('camera-photo')), findsNothing);
+        expect(find.byKey(const Key('camera-note')), findsNothing);
+        // Header + thumbnails stay visible (spec §5).
+        expect(find.byKey(const Key('camera-back')), findsOneWidget);
+        expect(find.byKey(const Key('camera-thumbnails')), findsOneWidget);
+      });
+
+      testWidgets('shows the two color buttons (camera-icon style) and Send; '
+          'palettes stay closed until asked', (tester) async {
+        await tester.pumpWidget(_render(composing));
+
+        expect(find.byKey(const Key('note-bg-button')), findsOneWidget);
+        expect(find.byKey(const Key('note-text-button')), findsOneWidget);
+        expect(find.byKey(const Key('note-send')), findsOneWidget);
+        expect(find.byKey(const Key('note-bg-palette')), findsNothing);
+        expect(find.byKey(const Key('note-text-palette')), findsNothing);
+      });
+
+      testWidgets('tapping the background button opens its palette; picking a '
+          'swatch applies it and closes the picker', (tester) async {
+        await tester.pumpWidget(_render(composing));
+
+        await tester.tap(find.byKey(const Key('note-bg-button')));
+        await tester.pump();
+        expect(find.byKey(const Key('note-bg-palette')), findsOneWidget);
+
+        await tester
+            .tap(find.byKey(Key('note-bg-swatch-${oliveDark.toARGB32()}')));
+        await tester.pump();
+
+        final canvas =
+            tester.widget<Container>(find.byKey(const Key('note-canvas')));
+        expect((canvas.decoration as BoxDecoration?)?.color ?? canvas.color,
+            oliveDark);
+        expect(find.byKey(const Key('note-bg-palette')), findsNothing);
+      });
+
+      testWidgets('the two pickers are exclusive — opening one closes the '
+          'other', (tester) async {
+        await tester.pumpWidget(_render(composing));
+
+        await tester.tap(find.byKey(const Key('note-bg-button')));
+        await tester.pump();
+        expect(find.byKey(const Key('note-bg-palette')), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('note-text-button')));
+        await tester.pump();
+        expect(find.byKey(const Key('note-text-palette')), findsOneWidget);
+        expect(find.byKey(const Key('note-bg-palette')), findsNothing);
+      });
+
+      testWidgets('Send is disabled while a send is in flight — impatient '
+          'tapping must not duplicate the note', (tester) async {
+        final fake = _FakeCameraNotifier(const CameraState(
+          conversationId: _convId,
+          mode: CameraMode.noteComposer,
+          isLoading: true,
+        ));
+        await tester.pumpWidget(_routed(fake));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(find.byKey(const Key('note-input')), 'hi');
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('note-send')));
+        await tester.pumpAndSettle();
+
+        expect(fake.sentNotes, isEmpty);
+      });
+
+      testWidgets('typing and tapping Send calls sendNote with the text and '
+          'the selected colors', (tester) async {
+        final fake = _FakeCameraNotifier(composing);
+        await tester.pumpWidget(_routed(fake));
+        await tester.pumpAndSettle();
+
+        await tester.enterText(
+            find.byKey(const Key('note-input')), 'hello roger');
+        await tester.pump(); // let the Send pill enable off the new text
+        await tester.tap(find.byKey(const Key('note-send')));
+        await tester.pumpAndSettle();
+
+        expect(fake.sentNotes.length, 1);
+        expect(fake.sentNotes.single.text, 'hello roger');
+        // Defaults: charcoal canvas, warm white text (spec §4 palette).
+        expect(fake.sentNotes.single.backgroundColor, charcoal.toARGB32());
+        expect(fake.sentNotes.single.textColor, warmWhite.toARGB32());
+      });
+
+      testWidgets('Send with an empty canvas does not call sendNote',
+          (tester) async {
+        final fake = _FakeCameraNotifier(composing);
+        await tester.pumpWidget(_routed(fake));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('note-send')));
+        await tester.pumpAndSettle();
+
+        expect(fake.sentNotes, isEmpty);
+      });
+
+      testWidgets('picking a background swatch recolors the canvas and rides '
+          'into sendNote', (tester) async {
+        final fake = _FakeCameraNotifier(composing);
+        await tester.pumpWidget(_routed(fake));
+        await tester.pumpAndSettle();
+
+        // Open the background picker, then pick. Swatches carry keys by
+        // palette + ARGB value.
+        await tester.tap(find.byKey(const Key('note-bg-button')));
+        await tester.pump();
+        final oliveSwatch =
+            find.byKey(Key('note-bg-swatch-${oliveDark.toARGB32()}'));
+        await tester.ensureVisible(oliveSwatch);
+        await tester.tap(oliveSwatch);
+        await tester.pump();
+
+        final canvas =
+            tester.widget<Container>(find.byKey(const Key('note-canvas')));
+        expect((canvas.decoration as BoxDecoration?)?.color ?? canvas.color,
+            oliveDark);
+
+        await tester.enterText(find.byKey(const Key('note-input')), 'hi');
+        await tester.pump(); // let the Send pill enable off the new text
+        await tester.tap(find.byKey(const Key('note-send')));
+        await tester.pumpAndSettle();
+
+        expect(fake.sentNotes.single.backgroundColor, oliveDark.toARGB32());
+      });
+
+      testWidgets('back exits the composer instead of leaving the screen',
+          (tester) async {
+        final fake = _FakeCameraNotifier(composing);
+        await tester.pumpWidget(_routed(fake));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('camera-back')));
+        await tester.pumpAndSettle();
+
+        expect(fake.exitComposerCalls, 1);
+        // Still on the camera screen, not bounced to Conversations.
+        expect(find.text('CONVERSATIONS'), findsNothing);
+      });
+
+      testWidgets('a subtle counter appears as the text approaches the '
+          '1000-char limit', (tester) async {
+        await tester.pumpWidget(_render(composing));
+
+        expect(find.byKey(const Key('note-counter')), findsNothing);
+
+        await tester.enterText(
+            find.byKey(const Key('note-input')), 'x' * 950);
+        await tester.pump();
+
+        expect(find.byKey(const Key('note-counter')), findsOneWidget);
+        expect(find.textContaining('950'), findsOneWidget);
+      });
+    });
+
+    // ── Note viewer + thumbnails (6b) ────────────────────────────────────────
+    group('note thumbnails and viewer', () {
+      final noteMessage = Message(
+        id: 'm-1',
+        conversationId: _convId,
+        senderId: 'u-other',
+        type: MessageType.note,
+        encryptedText: 'cipher',
+        createdAt: DateTime(2026, 7, 22),
+      );
+      const notePayload = NotePayload(
+        text: 'full-screen note',
+        backgroundColor: 0xFF595900,
+        textColor: 0xFFE8E600,
+      );
+
+      CameraState withNote({CameraMode mode = CameraMode.preview}) =>
+          CameraState(
+            conversationId: _convId,
+            mode: mode,
+            thumbnails: [noteMessage],
+            notePayloads: const {'m-1': notePayload},
+            activeMessage: mode == CameraMode.playback ? noteMessage : null,
+          );
+
+      testWidgets('a note renders a thumbnail tinted with its background '
+          'color', (tester) async {
+        await tester.pumpWidget(_render(withNote()));
+
+        final item = find.byKey(const Key('camera-thumbnail-item'));
+        expect(item, findsOneWidget);
+        final container = tester.widget<Container>(item);
+        expect((container.decoration as BoxDecoration).color,
+            const Color(0xFF595900));
+      });
+
+      testWidgets('tapping a thumbnail calls selectThumbnail with its id',
+          (tester) async {
+        final fake = _FakeCameraNotifier(withNote());
+        await tester.pumpWidget(_routed(fake));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('camera-thumbnail-item')));
+        expect(fake.selectedThumbnails, ['m-1']);
+      });
+
+      testWidgets('playback of a note fills the view with its colors and text',
+          (tester) async {
+        await tester.pumpWidget(
+            _render(withNote(mode: CameraMode.playback)));
+
+        expect(find.byKey(const Key('note-viewer')), findsOneWidget);
+        expect(find.text('full-screen note'), findsOneWidget);
+        final viewer =
+            tester.widget<Container>(find.byKey(const Key('note-viewer')));
+        expect((viewer.decoration as BoxDecoration?)?.color ?? viewer.color,
+            const Color(0xFF595900));
+        // Camera controls are gone while viewing.
+        expect(find.byKey(const Key('camera-record')), findsNothing);
+      });
+
+      testWidgets('back during playback closes the viewer instead of leaving '
+          'the screen', (tester) async {
+        final fake = _FakeCameraNotifier(withNote(mode: CameraMode.playback));
+        await tester.pumpWidget(_routed(fake));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('camera-back')));
+        await tester.pumpAndSettle();
+
+        expect(fake.closePlaybackCalls, 1);
+        expect(find.text('CONVERSATIONS'), findsNothing);
+      });
+
+      testWidgets('an undecryptable note shows an error state, not silence',
+          (tester) async {
+        final state = CameraState(
+          conversationId: _convId,
+          mode: CameraMode.playback,
+          thumbnails: [noteMessage],
+          // no payload for m-1 — decryption failed
+          activeMessage: noteMessage,
+        );
+        await tester.pumpWidget(_render(state));
+
+        expect(find.byKey(const Key('note-viewer-error')), findsOneWidget);
+      });
+    });
+
     // ── Later slices — kept skipped, scoped (testWidgets skip is bool-only,
     // so the slice is named in the description) ──────────────────────────────
     group('deferred', () {
@@ -280,9 +567,6 @@ void main() {
           (_) async {},
           skip: true);
       testWidgets('playback speed control during playback [6c]', (_) async {},
-          skip: true);
-      testWidgets('note composer replaces camera with a text canvas [6b]',
-          (_) async {},
           skip: true);
     });
   });

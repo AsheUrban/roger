@@ -91,6 +91,17 @@ const activeNow = TextStyle(
   color: oliveLight,
 );
 
+// ── Notes ─────────────────────────────────────────────────────────────────────
+// Color comes from the note's own payload (user-picked, spec §5) — only
+// size/weight shared here. One token for composer AND viewer, so the note
+// renders exactly as composed.
+const noteText = TextStyle(fontSize: 24);
+
+const noteThumbLabel = TextStyle(
+  fontSize: 14,
+  fontWeight: FontWeight.w600,
+);
+
 // ── Avatars ───────────────────────────────────────────────────────────────────
 // Color comes from the avatar color map — only size/weight shared here
 const avatarInitialLarge = TextStyle(
