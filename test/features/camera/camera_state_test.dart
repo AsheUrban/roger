@@ -2,12 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:roger/core/models/message.dart';
 import 'package:roger/features/camera/camera_state.dart';
 
-// CameraState does not currently expose a copyWith — Step 6 (Camera) is
-// unbuilt and the state struct is a placeholder. The copyWith contract from
-// the migration doc therefore can't be tested on this class today; the
-// other two contracts (equal-when-fields-match, not-equal-when-any-field-
-// differs) still apply and are covered below. When Step 6 lands and adds
-// copyWith, a third test case should be added here.
+// Camera 6a adds copyWith (the notifier's record/flip transitions need it).
+// Equality contracts (equal-when-fields-match, not-equal-when-any-differs)
+// were already covered; the copyWith contract is added below.
 
 CameraState _state({
   String conversationId = 'conv-1',
@@ -170,6 +167,33 @@ void main() {
 
     test('not equal when error differs', () {
       expect(_state(), isNot(equals(_state(error: 'oops'))));
+    });
+  });
+
+  group('CameraState copyWith', () {
+    test('overrides only the given fields, leaving the rest intact', () {
+      final base = _state(conversationId: 'conv-9', playbackSpeed: 1.5);
+      final updated =
+          base.copyWith(mode: CameraMode.recording, isFrontCamera: false);
+
+      expect(updated.mode, CameraMode.recording);
+      expect(updated.isFrontCamera, false);
+      // Untouched fields carry over.
+      expect(updated.conversationId, 'conv-9');
+      expect(updated.playbackSpeed, 1.5);
+    });
+
+    test('returns an equal state when nothing is overridden', () {
+      final base = _state(mode: CameraMode.recording, isFrontCamera: false);
+      expect(base.copyWith(), equals(base));
+    });
+
+    test('can set and clear the nullable error via the wrapper', () {
+      final withError = _state().copyWith(error: () => 'boom');
+      expect(withError.error, 'boom');
+
+      final cleared = withError.copyWith(error: () => null);
+      expect(cleared.error, isNull);
     });
   });
 }

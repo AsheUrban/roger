@@ -1,58 +1,109 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:roger/features/camera/camera_notifier.dart';
+import 'package:roger/features/camera/camera_state.dart';
+
+// Camera 6a (shell): the record button toggles recording mode and flip toggles
+// the camera. Real capture / upload / encryption is 6c; note send is 6b; those
+// groups stay skipped, scoped to their slice.
 
 void main() {
-  group('CameraNotifier', skip: 'feature not built — step 6', () {
-    group('recording', () {
-      test('startRecording switches mode to recording', () {});
+  group('CameraNotifier', () {
+    group('recording (6a — mode toggle only)', () {
+      test('startRecording switches mode to recording', () async {
+        final container = ProviderContainer.test();
+        await container.read(cameraProvider('conv-1').notifier).startRecording();
 
-      test('stopRecording uploads encrypted video and returns to preview',
-          () {});
+        expect(container.read(cameraProvider('conv-1')).mode,
+            CameraMode.recording);
+      });
 
-      test('recording caps at 15 minutes with continuation prompt', () {});
+      test('stopRecording returns to preview mode', () async {
+        final container = ProviderContainer.test();
+        final notifier = container.read(cameraProvider('conv-1').notifier);
+        await notifier.startRecording();
+        await notifier.stopRecording();
 
-      test('tracks elapsed recording time', () {});
-    });
+        expect(
+            container.read(cameraProvider('conv-1')).mode, CameraMode.preview);
+      });
 
-    group('photo', () {
-      test('takePhoto captures and uploads encrypted photo', () {});
-    });
+      test('recording caps at 15 minutes with continuation prompt', () {},
+          skip: 'Camera 6c — real capture');
 
-    group('note', () {
-      test('enterNoteComposer switches mode to noteComposer', () {});
-
-      test('sendNote encrypts text and sends', () {});
-    });
-
-    group('playback', () {
-      test('selectThumbnail switches mode to playback', () {});
-
-      test('setPlaybackSpeed accepts 0.5x, 1x, 1.5x, 2x', () {});
-
-      test('toggleMute flips mute state', () {});
-
-      test('toggleCaptions triggers on-device transcription', () {});
+      test('tracks elapsed recording time', () {},
+          skip: 'Camera 6c — real capture');
     });
 
     group('camera', () {
-      test('defaults to front-facing camera', () {});
+      test('initial state is preview mode, front camera, scoped to conversation',
+          () {
+        final container = ProviderContainer.test();
+        final state = container.read(cameraProvider('conv-1'));
 
-      test('flipCamera toggles between front and rear', () {});
+        expect(state.mode, CameraMode.preview);
+        expect(state.isFrontCamera, true);
+        expect(state.conversationId, 'conv-1');
+      });
+
+      test('flipCamera toggles between front and rear', () {
+        final container = ProviderContainer.test();
+        final notifier = container.read(cameraProvider('conv-1').notifier);
+
+        expect(container.read(cameraProvider('conv-1')).isFrontCamera, true);
+        notifier.flipCamera();
+        expect(container.read(cameraProvider('conv-1')).isFrontCamera, false);
+        notifier.flipCamera();
+        expect(container.read(cameraProvider('conv-1')).isFrontCamera, true);
+      });
+    });
+
+    group('photo', () {
+      test('takePhoto captures and uploads encrypted photo', () {},
+          skip: 'Camera 6c — photo capture + R2');
+    });
+
+    group('note', () {
+      test('enterNoteComposer switches mode to noteComposer', () {},
+          skip: 'Camera 6b — note composer');
+
+      test('sendNote encrypts text and sends', () {},
+          skip: 'Camera 6b — note E2EE + send');
+    });
+
+    group('playback', () {
+      test('selectThumbnail switches mode to playback', () {},
+          skip: 'Camera 6c — playback');
+
+      test('setPlaybackSpeed accepts 0.5x, 1x, 1.5x, 2x', () {},
+          skip: 'Camera 6c — playback');
+
+      test('toggleMute flips mute state', () {}, skip: 'Camera 6c — playback');
+
+      test('toggleCaptions triggers on-device transcription', () {},
+          skip: 'Camera 6c — playback');
     });
 
     group('presence and video call', () {
-      test('isOtherUserActive updates via Realtime stream', () {});
+      test('isOtherUserActive updates via Realtime stream', () {},
+          skip: 'step 9 — video call presence');
 
-      test('video call pill only appears when other user is active', () {});
+      test('video call pill only appears when other user is active', () {},
+          skip: 'step 9 — video call');
     });
 
     group('content actions', () {
-      test('long press own thumbnail shows download/delete/forward menu', () {});
+      test('long press own thumbnail shows download/delete/forward menu', () {},
+          skip: 'Camera 6c — content actions');
 
-      test('long press other user thumbnail does nothing', () {});
+      test('long press other user thumbnail does nothing', () {},
+          skip: 'Camera 6c — content actions');
 
-      test('delete purges R2 and notifies all members immediately', () {});
+      test('delete purges R2 and notifies all members immediately', () {},
+          skip: 'step 11 — R2 purge');
 
-      test('delete interrupts active playback if message is playing', () {});
+      test('delete interrupts active playback if message is playing', () {},
+          skip: 'Camera 6c — content actions');
     });
   });
 }

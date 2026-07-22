@@ -33,6 +33,39 @@ class CameraState {
     this.error,
   });
 
+  CameraState copyWith({
+    String? conversationId,
+    CameraMode? mode,
+    bool? isFrontCamera,
+    bool? isOtherUserActive,
+    bool? isCallActive,
+    List<Message>? thumbnails,
+    Message? Function()? activeMessage,
+    double? playbackSpeed,
+    bool? isMuted,
+    bool? showCaptions,
+    Duration? recordingElapsed,
+    bool? isLoading,
+    String? Function()? error,
+  }) {
+    return CameraState(
+      conversationId: conversationId ?? this.conversationId,
+      mode: mode ?? this.mode,
+      isFrontCamera: isFrontCamera ?? this.isFrontCamera,
+      isOtherUserActive: isOtherUserActive ?? this.isOtherUserActive,
+      isCallActive: isCallActive ?? this.isCallActive,
+      thumbnails: thumbnails ?? this.thumbnails,
+      activeMessage:
+          activeMessage != null ? activeMessage() : this.activeMessage,
+      playbackSpeed: playbackSpeed ?? this.playbackSpeed,
+      isMuted: isMuted ?? this.isMuted,
+      showCaptions: showCaptions ?? this.showCaptions,
+      recordingElapsed: recordingElapsed ?? this.recordingElapsed,
+      isLoading: isLoading ?? this.isLoading,
+      error: error != null ? error() : this.error,
+    );
+  }
+
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
