@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 ///
 /// All conversation creation flows (1:1 chat, group chat, invite-pending)
 /// route through [createConversation], which calls the `create_conversation`
-/// Postgres function (migration 00003). The function performs the
+/// Postgres function. The function performs the
 /// `conversations` and `conversation_members` inserts atomically under
 /// `security definer`, avoiding the RLS chicken-and-egg where `.select()`
 /// on the conversation insert would otherwise fail before the caller is

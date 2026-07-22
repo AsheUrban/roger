@@ -3,7 +3,7 @@
 //
 // Targets the `discover_user(p_phone text)` RPC (decided 6/4 — an RPC, not an
 // Edge Function; see LOG_6_4). The RPC: rate-limit check/increment →
-// peppered_phone_hash → match against users.phone_hash → return
+// peppered_phone_hash → match against user_private.phone_hash → return
 // (user_id, avatar_color, last_active_at) for an exact-number match, or nothing.
 // Raw number used transiently, never stored. At most one row; rate-limit
 // exceeded raises.

@@ -9,7 +9,9 @@
 -- Privacy posture baked in (Roger_Spec §18 Cross-Cutting Privacy Invariants +
 -- TODO §1):
 --   * App tables hold only a peppered `phone_hash`, never a raw phone number.
---     Raw phone lives only in auth.users (the OTP login credential).
+--     Raw phone lives only in auth.users (the OTP login credential). phone_hash
+--     and recovery_email live in a self-only `user_private` table, so the
+--     conversation-mate read on `users` never reaches them.
 --   * users / user_keys SELECT narrowed to "self OR shares an active
 --     conversation with me" — no enumerable user directory.
 --   * No client INSERT/DELETE on users: account creation goes only through the
@@ -36,14 +38,23 @@ create extension if not exists pgcrypto with schema extensions; -- digest() for 
 -- TABLES
 -- ============================================================
 
--- 1. users — app-side identity. No raw phone; peppered hash only.
+-- 1. users — app-side identity. Non-sensitive fields only: a conversation-mate
+--    can read this row (avatar_color / last_active_at), so nothing sensitive
+--    lives here. phone_hash + recovery_email are in user_private (below).
 create table public.users (
   id              uuid primary key references auth.users(id) on delete cascade,
-  phone_hash      text not null unique, -- peppered hash; raw phone lives only in auth.users
   avatar_color    text not null,
-  recovery_email  text unique,
   last_active_at  timestamptz,
   created_at      timestamptz not null default now()
+);
+
+-- 1b. user_private — sensitive identity fields, self-only (see RLS). Split from
+--     users so the mate-readable `users` row never exposes them. phone_hash is
+--     set by create_account; raw phone still lives only in auth.users.
+create table public.user_private (
+  user_id        uuid primary key references public.users(id) on delete cascade,
+  phone_hash     text not null unique,
+  recovery_email text unique
 );
 
 -- 2. conversations
@@ -349,8 +360,11 @@ begin
     raise exception 'No verified phone on the auth account' using errcode = '42501';
   end if;
 
-  insert into public.users (id, phone_hash, avatar_color, created_at)
-  values (v_caller, public.peppered_phone_hash(v_phone), p_avatar_color, v_now);
+  insert into public.users (id, avatar_color, created_at)
+  values (v_caller, p_avatar_color, v_now);
+
+  insert into public.user_private (user_id, phone_hash)
+  values (v_caller, public.peppered_phone_hash(v_phone));
 
   insert into public.user_settings (user_id, created_at, updated_at)
   values (v_caller, v_now, v_now);
@@ -408,7 +422,8 @@ begin
   return query
     select u.id, u.avatar_color, u.last_active_at
     from public.users u
-    where u.phone_hash = v_hash
+    join public.user_private p on p.user_id = u.id
+    where p.phone_hash = v_hash
     limit 1;
 end;
 $$;
@@ -433,6 +448,25 @@ create policy "users: update own"
   using (id = auth.uid())
   with check (id = auth.uid());
 
+-- 1b. user_private — self-only. No client INSERT (create_account RPC only).
+--     Client UPDATE is column-restricted to recovery_email (phone_hash is
+--     server-derived) via the grant below.
+alter table public.user_private enable row level security;
+
+create policy "user_private: select own"
+  on public.user_private for select
+  to authenticated
+  using (user_id = auth.uid());
+
+create policy "user_private: update own"
+  on public.user_private for update
+  to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+revoke update on public.user_private from authenticated;
+grant update (recovery_email) on public.user_private to authenticated;
+
 -- 2. conversations
 alter table public.conversations enable row level security;
 
@@ -441,10 +475,8 @@ create policy "conversations: select for members"
   to authenticated
   using (public.is_conversation_member(id));
 
-create policy "conversations: insert for authenticated"
-  on public.conversations for insert
-  to authenticated
-  with check (true);
+-- Creation is RPC-only (create_conversation, SECURITY DEFINER) — no client
+-- INSERT policy, so membership can't be forged by direct insert.
 
 create policy "conversations: update for members"
   on public.conversations for update
@@ -460,10 +492,8 @@ create policy "conversation_members: select for members"
   to authenticated
   using (public.is_conversation_member(conversation_id));
 
-create policy "conversation_members: insert for authenticated"
-  on public.conversation_members for insert
-  to authenticated
-  with check (true);
+-- Membership is written only through the create_conversation RPC — no client
+-- INSERT policy.
 
 create policy "conversation_members: update own"
   on public.conversation_members for update
@@ -495,8 +525,14 @@ create policy "messages: insert for members"
 create policy "messages: update own"
   on public.messages for update
   to authenticated
-  using (sender_id = auth.uid())
-  with check (sender_id = auth.uid());
+  using (
+    sender_id = auth.uid()
+    and public.is_conversation_member(conversation_id)
+  )
+  with check (
+    sender_id = auth.uid()
+    and public.is_conversation_member(conversation_id)
+  );
 
 create policy "messages: delete own"
   on public.messages for delete
@@ -598,7 +634,8 @@ create policy "pending_invites: select for inviter or recipient"
   to authenticated
   using (
     inviting_user_id = auth.uid()
-    or invited_phone_hash = (select phone_hash from public.users where id = auth.uid())
+    or invited_phone_hash =
+        (select phone_hash from public.user_private where user_id = auth.uid())
   );
 
 create policy "pending_invites: insert for authenticated"
@@ -649,7 +686,10 @@ create policy "conversation_keys: select own"
 create policy "conversation_keys: insert for members"
   on public.conversation_keys for insert
   to authenticated
-  with check (public.is_conversation_member(conversation_id));
+  with check (
+    public.is_conversation_member(conversation_id)
+    and user_id = auth.uid()
+  );
 
 create policy "conversation_keys: update own"
   on public.conversation_keys for update

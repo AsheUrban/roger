@@ -80,12 +80,19 @@ void main() {
   });
 
   group('Invariant 2 — no raw phone in application data', () {
-    test('own users row exposes phone_hash, never phone_number', () async {
+    test('users row holds no raw phone and no phone_hash; hash is in user_private',
+        () async {
       final row = await a.from('users').select().eq('id', aId).single();
       expect(row.containsKey('phone_number'), isFalse,
-          reason: 'users.phone_number must not exist — never created by 00001_init');
-      expect(row.containsKey('phone_hash'), isTrue,
-          reason: 'users.phone_hash must exist and be populated');
+          reason: 'users.phone_number must not exist — never created');
+      // phone_hash lives in the self-only user_private table, not on users.
+      expect(row.containsKey('phone_hash'), isFalse,
+          reason: 'phone_hash lives in self-only user_private');
+
+      final priv =
+          await a.from('user_private').select().eq('user_id', aId).single();
+      expect(priv['phone_hash'], isNotNull,
+          reason: 'self reads its own phone_hash from user_private');
     });
   });
 
@@ -101,6 +108,17 @@ void main() {
       final rows = await a.from('user_keys').select().eq('user_id', bId);
       expect(rows, isEmpty,
           reason: 'user_keys SELECT narrowed to self-or-shares-conversation');
+    });
+
+    test("A cannot read B's user_private (self-only identity columns)",
+        () async {
+      // Sensitive identity columns (phone_hash, recovery_email) live in the
+      // self-only user_private table — unreadable by anyone else, including a
+      // conversation-mate.
+      final rows = await a.from('user_private').select().eq('user_id', bId);
+      expect(rows, isEmpty,
+          reason: 'user_private is self-only; sensitive identity columns are '
+              'unreadable by any other client');
     });
 
     test('A CAN read its own row (positive control — must not over-restrict)',

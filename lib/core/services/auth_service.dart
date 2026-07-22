@@ -63,6 +63,9 @@ class AuthService {
     final authUser = _client.auth.currentUser;
     if (authUser == null) return null;
 
+    // recovery_email lives in the self-only user_private table. It reads null
+    // here until Settings (step 8) fetches it from user_private; it's null
+    // pre-Settings anyway, so no behavior change today.
     final row = await _client
         .from('users')
         .select()
@@ -90,17 +93,7 @@ class AuthService {
     await _client.auth.signOut();
   }
 
-  Future<void> updatePhoneNumber(String newNumber) async {
-    // TODO: Phone is now the auth identity. Changing it requires updating
-    // both public.users AND auth.users. auth.users update requires
-    // service_role key — needs Edge Function or database trigger,
-    // same pattern as deleteAccount. Must also verify OTP to new number
-    // before updating (spec: Settings → phone number change).
-    await _client
-        .from('users')
-        .update({'phone_number': newNumber})
-        .eq('id', _client.auth.currentUser!.id);
-  }
+  // Phone-number change is handled server-side (Edge Function), not a client write.
 
   Future<void> updateAvatarColor(String color) async {
     await _client
@@ -110,10 +103,11 @@ class AuthService {
   }
 
   Future<void> updateRecoveryEmail(String email) async {
+    // recovery_email lives in the self-only user_private table.
     await _client
-        .from('users')
+        .from('user_private')
         .update({'recovery_email': email})
-        .eq('id', _client.auth.currentUser!.id);
+        .eq('user_id', _client.auth.currentUser!.id);
   }
 
   app.User _userFromRow(Map<String, dynamic> row) {

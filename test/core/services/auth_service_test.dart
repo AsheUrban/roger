@@ -25,7 +25,7 @@ void main() {
           () {});
 
       // Atomicity (Gap 1, LOG_5_31): createAccount calls the create_account
-      // RPC (migration 00004), which inserts the users and user_settings rows
+      // RPC, which inserts the users and user_settings rows
       // in one transaction. A failure must leave NEITHER row — never an
       // orphaned users row with no settings.
       test('atomic — a failed account creation leaves no users or settings row',
@@ -33,7 +33,10 @@ void main() {
     });
 
     group('updatePhoneNumber', () {
-      test('updates phone number after OTP verification', () {});
+      test('phone change routes through an Edge Function, not a client write',
+          () {},
+          skip: 'deferred to Settings (step 8) — phone change routes through an '
+              'Edge Function, not a client write');
     });
 
     group('updateRecoveryEmail', () {
