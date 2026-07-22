@@ -29,7 +29,7 @@ class _FakeSearchNotifier extends SearchNotifier {
   }
 
   @override
-  Future<String> createGroupConversation({String? name}) async {
+  Future<String?> createGroupConversation({String? name}) async {
     createGroupCalls.add(name);
     return 'fake-conv-id';
   }

@@ -47,7 +47,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         onConfirm: (name) async {
           Navigator.pop(sheetContext);
           final convId = await notifier.createGroupConversation(name: name);
-          if (mounted) {
+          // Null = creation rejected (e.g. the add cap); the notifier set the
+          // error banner, so stay put rather than navigating.
+          if (mounted && convId != null) {
             context.go('/camera/$convId');
           }
         },
@@ -247,7 +249,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               onChat: () async {
                                 final convId =
                                     await notifier.startChat(result.userId);
-                                if (context.mounted) {
+                                if (context.mounted && convId != null) {
                                   context.go('/camera/$convId');
                                 }
                               },

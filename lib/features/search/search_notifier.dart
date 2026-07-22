@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/added_contacts_notifier.dart';
 import '../../core/providers.dart';
@@ -117,11 +118,18 @@ class SearchNotifier extends Notifier<SearchState> {
   }
 
   /// Open the existing 1:1 with this user, or create one if none exists.
-  Future<String> startChat(String userId) {
-    return _conversationService.findOrCreate1to1(
-      currentUserId: _currentUserId!,
-      otherUserId: userId,
-    );
+  /// Returns null (and surfaces a message) if creation is rejected — e.g. the
+  /// per-(adder, addee) daily add cap (spec §9).
+  Future<String?> startChat(String userId) async {
+    try {
+      return await _conversationService.findOrCreate1to1(
+        currentUserId: _currentUserId!,
+        otherUserId: userId,
+      );
+    } on PostgrestException catch (e) {
+      state = state.copyWith(error: () => e.message);
+      return null;
+    }
   }
 
   // ── Group mode ──────────────────────────────────────────────────────────
@@ -150,14 +158,21 @@ class SearchNotifier extends Notifier<SearchState> {
     state = state.copyWith(selectedUserIds: current);
   }
 
-  /// Create a group conversation with the selected members.
-  Future<String> createGroupConversation({String? name}) async {
+  /// Create a group conversation with the selected members. Returns null (and
+  /// surfaces a message, keeping the selection) if creation is rejected — e.g.
+  /// the per-(adder, addee) daily add cap (spec §9).
+  Future<String?> createGroupConversation({String? name}) async {
     final currentUserId = _currentUserId!;
-    final convId = await _conversationService.createConversation(
-      name: name,
-      memberIds: [currentUserId, ...state.selectedUserIds],
-    );
-    exitGroupMode();
-    return convId;
+    try {
+      final convId = await _conversationService.createConversation(
+        name: name,
+        memberIds: [currentUserId, ...state.selectedUserIds],
+      );
+      exitGroupMode();
+      return convId;
+    } on PostgrestException catch (e) {
+      state = state.copyWith(error: () => e.message);
+      return null;
+    }
   }
 }

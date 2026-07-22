@@ -212,5 +212,50 @@ void main() {
           skip: 'Integration test — findOrCreate1to1 hits real Supabase',
           () {});
     });
+
+    group('add-cap rejection (per-(adder, addee) daily cap)', () {
+      test('createGroupConversation surfaces the cap message, stays in group '
+          'mode, and returns null', () async {
+        final container = makeContainer();
+        final notifier = container.read(searchProvider.notifier);
+        notifier.enterGroupMode();
+        notifier.toggleContactSelection('u-1');
+        notifier.toggleContactSelection('u-2');
+
+        when(() => conversationService.createConversation(
+              name: any(named: 'name'),
+              memberIds: any(named: 'memberIds'),
+            )).thenThrow(const PostgrestException(
+            message:
+                "You've added someone to too many conversations today. Try again tomorrow."));
+
+        final convId =
+            await notifier.createGroupConversation(name: 'Spam Night');
+
+        expect(convId, isNull);
+        expect(container.read(searchProvider).error, contains('too many'));
+        // Selection kept so the user can adjust/retry — not silently dropped.
+        expect(container.read(searchProvider).isGroupMode, true);
+        expect(container.read(searchProvider).selectedUserIds,
+            containsAll(['u-1', 'u-2']));
+      });
+
+      test('startChat surfaces the cap message and returns null', () async {
+        final container = makeContainer();
+        final notifier = container.read(searchProvider.notifier);
+
+        when(() => conversationService.findOrCreate1to1(
+              currentUserId: any(named: 'currentUserId'),
+              otherUserId: any(named: 'otherUserId'),
+            )).thenThrow(const PostgrestException(
+            message:
+                "You've added someone to too many conversations today. Try again tomorrow."));
+
+        final convId = await notifier.startChat('u-1');
+
+        expect(convId, isNull);
+        expect(container.read(searchProvider).error, contains('too many'));
+      });
+    });
   });
 }
