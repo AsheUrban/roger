@@ -10,6 +10,7 @@ import 'package:roger/core/auth_state.dart';
 import 'package:roger/core/models/user.dart';
 import 'package:roger/core/providers.dart';
 import 'package:roger/core/services/auth_service.dart';
+import 'package:roger/core/services/key_service.dart';
 
 // J (cached auth state). See LOG_5_29.md for the full design.
 //
@@ -35,6 +36,8 @@ import 'package:roger/core/services/auth_service.dart';
 
 class MockAuthService extends Mock implements AuthService {}
 
+class MockKeyService extends Mock implements KeyService {}
+
 supa.Session _session() => supa.Session(
       accessToken: 'test-token',
       tokenType: 'bearer',
@@ -55,15 +58,19 @@ User _appUser() => User(
 
 void main() {
   late MockAuthService authService;
+  late MockKeyService keyService;
   late StreamController<supa.AuthChangeEvent> events;
 
   setUp(() {
     authService = MockAuthService();
+    keyService = MockKeyService();
     events = StreamController<supa.AuthChangeEvent>.broadcast();
     when(() => authService.authEvents).thenAnswer((_) => events.stream);
     // Defaults: no session, no users row. Overridden per test.
     when(() => authService.currentSession).thenReturn(null);
     when(() => authService.getCurrentUser()).thenAnswer((_) async => null);
+    when(() => keyService.ensureOwnKeyPair())
+        .thenAnswer((_) async => (publicKey: 'pub', privateKey: 'priv'));
   });
 
   tearDown(() async {
@@ -73,6 +80,7 @@ void main() {
   ProviderContainer makeContainer() => ProviderContainer.test(
         overrides: [
           authServiceProvider.overrideWithValue(authService),
+          keyServiceProvider.overrideWithValue(keyService),
         ],
       );
 
@@ -188,6 +196,69 @@ void main() {
       expect(container.read(authProvider), const AuthStateNeedsOnboarding());
 
       container.read(authProvider.notifier).markOnboarded();
+      expect(container.read(authProvider), const AuthStateOnboarded());
+    });
+  });
+
+  group('key publication (spec §7 — keys exist from account creation)', () {
+    test('a confirmed onboarded user at launch publishes their key pair',
+        () async {
+      when(() => authService.currentSession).thenReturn(_session());
+      when(() => authService.getCurrentUser())
+          .thenAnswer((_) async => _appUser());
+
+      final container = makeContainer();
+      container.read(authProvider);
+      await pumpEventQueue();
+
+      verify(() => keyService.ensureOwnKeyPair()).called(1);
+    });
+
+    test('markOnboarded (new account just created) publishes the key pair',
+        () async {
+      when(() => authService.currentSession).thenReturn(null);
+
+      final container = makeContainer();
+      container.read(authProvider.notifier).markOnboarded();
+      await pumpEventQueue();
+
+      verify(() => keyService.ensureOwnKeyPair()).called(1);
+    });
+
+    test('no session → no key publication attempt', () async {
+      when(() => authService.currentSession).thenReturn(null);
+
+      final container = makeContainer();
+      container.read(authProvider);
+      await pumpEventQueue();
+
+      verifyNever(() => keyService.ensureOwnKeyPair());
+    });
+
+    test('a stale session corrected to NeedsOnboarding does not publish',
+        () async {
+      when(() => authService.currentSession).thenReturn(_session());
+      when(() => authService.getCurrentUser()).thenAnswer((_) async => null);
+
+      final container = makeContainer();
+      container.read(authProvider);
+      await pumpEventQueue();
+
+      verifyNever(() => keyService.ensureOwnKeyPair());
+    });
+
+    test('a failed publication is swallowed — retried lazily on the next '
+        'launch / first send, never crashes auth', () async {
+      when(() => authService.currentSession).thenReturn(_session());
+      when(() => authService.getCurrentUser())
+          .thenAnswer((_) async => _appUser());
+      when(() => keyService.ensureOwnKeyPair())
+          .thenThrow(Exception('offline'));
+
+      final container = makeContainer();
+      container.read(authProvider);
+      await pumpEventQueue();
+
       expect(container.read(authProvider), const AuthStateOnboarded());
     });
   });

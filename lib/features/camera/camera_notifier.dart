@@ -97,11 +97,11 @@ class CameraNotifier extends Notifier<CameraState> {
   // ── Note composer (6b) ───────────────────────────────────────────────────
 
   void enterNoteComposer() {
-    state = state.copyWith(mode: CameraMode.noteComposer);
+    state = state.copyWith(mode: CameraMode.noteComposer, error: () => null);
   }
 
   void exitNoteComposer() {
-    state = state.copyWith(mode: CameraMode.preview);
+    state = state.copyWith(mode: CameraMode.preview, error: () => null);
   }
 
   /// Encrypts and sends a note: payload (text + colors) → conversation key →
@@ -153,8 +153,11 @@ class CameraNotifier extends Notifier<CameraState> {
       if (!ref.mounted) return;
       // Stay in the composer so the text is not lost (spec §18: "Do not lose
       // the text"); an automatic retry queue is future work (tracked with the
-      // upload-retry open question).
-      state = state.copyWith(isLoading: false, error: () => e.toString());
+      // upload-retry open question). StateError carries a user-facing message
+      // (e.g. "member hasn't opened roger since encryption was added") —
+      // surface it without the "Bad state:" prefix.
+      final message = e is StateError ? e.message : e.toString();
+      state = state.copyWith(isLoading: false, error: () => message);
     }
   }
 

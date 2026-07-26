@@ -393,8 +393,9 @@ void main() {
 
         expect(fake.sentNotes.length, 1);
         expect(fake.sentNotes.single.text, 'hello roger');
-        // Defaults: charcoal canvas, warm white text (spec §4 palette).
-        expect(fake.sentNotes.single.backgroundColor, charcoal.toARGB32());
+        // Defaults: charcoal2 canvas (visible against the charcoal thumbnail
+        // strip — Ashe, 7/25), warm white text.
+        expect(fake.sentNotes.single.backgroundColor, charcoal2.toARGB32());
         expect(fake.sentNotes.single.textColor, warmWhite.toARGB32());
       });
 
@@ -437,6 +438,26 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(fake.sentNotes.single.backgroundColor, oliveDark.toARGB32());
+      });
+
+      testWidgets('a send failure shows the error on the composer — never a '
+          'silent nothing-happened', (tester) async {
+        const failed = CameraState(
+          conversationId: _convId,
+          mode: CameraMode.noteComposer,
+          error: "This conversation can't be encrypted yet — a member hasn't "
+              'opened roger since encryption was added.',
+        );
+        await tester.pumpWidget(_render(failed));
+
+        expect(find.byKey(const Key('note-send-error')), findsOneWidget);
+        expect(find.textContaining("can't be encrypted yet"), findsOneWidget);
+      });
+
+      testWidgets('no error line when there is no error', (tester) async {
+        await tester.pumpWidget(_render(composing));
+
+        expect(find.byKey(const Key('note-send-error')), findsNothing);
       });
 
       testWidgets('back exits the composer instead of leaving the screen',
@@ -502,6 +523,29 @@ void main() {
         final container = tester.widget<Container>(item);
         expect((container.decoration as BoxDecoration).color,
             const Color(0xFF595900));
+      });
+
+      testWidgets('thumbnails carry a hairline border so a charcoal note '
+          'never disappears into the strip', (tester) async {
+        // A note deliberately composed on the app's own charcoal background.
+        final charcoalNote = CameraState(
+          conversationId: _convId,
+          thumbnails: [noteMessage],
+          notePayloads: {
+            'm-1': NotePayload(
+              text: 'dark note',
+              backgroundColor: charcoal.toARGB32(),
+              textColor: warmWhite.toARGB32(),
+            ),
+          },
+        );
+        await tester.pumpWidget(_render(charcoalNote));
+
+        final container = tester.widget<Container>(
+            find.byKey(const Key('camera-thumbnail-item')));
+        expect((container.decoration as BoxDecoration).border, isNotNull,
+            reason: 'the strip background is charcoal — without a border a '
+                'charcoal thumbnail is invisible');
       });
 
       testWidgets('tapping a thumbnail calls selectThumbnail with its id',

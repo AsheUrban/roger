@@ -53,6 +53,20 @@ ConversationSummary _makeSummary({
   );
 }
 
+// Serves a seeded state and counts loadConversations calls — for asserting the
+// unknown-conversation re-fetch without hitting Supabase.
+class _ReloadCountingNotifier extends ConversationsNotifier {
+  final ConversationsState _seed;
+  final void Function() _onReload;
+  _ReloadCountingNotifier(this._seed, this._onReload);
+
+  @override
+  ConversationsState build() => _seed;
+
+  @override
+  Future<void> loadConversations() async => _onReload();
+}
+
 void main() {
   late MockContactsService contactsService;
   late MockConversationService conversationService;
@@ -196,6 +210,36 @@ void main() {
         final conversations = container.read(conversationsProvider).conversations;
         expect(conversations.first.conversation.id, 'conv-1');
         expect(conversations.last.conversation.id, 'conv-2');
+      });
+
+      test('a message for a conversation NOT in the list triggers a full '
+          'reload — a brand-new chat appears without an app restart', () {
+        final seed = ConversationsState(
+          conversations: [
+            _makeSummary(
+              conversation: _conv1,
+              lastMessageAt: DateTime(2026, 4, 1),
+            ),
+          ],
+        );
+        var reloads = 0;
+        final container = ProviderContainer.test(
+          overrides: [
+            conversationsProvider.overrideWith(
+                () => _ReloadCountingNotifier(seed, () => reloads++)),
+            currentUserIdProvider.overrideWithValue('current-user-id'),
+          ],
+        );
+
+        container.read(conversationsProvider.notifier).onNewMessage(
+              conversationId: 'conv-unknown',
+              senderId: 'other-user',
+              createdAt: DateTime(2026, 4, 8),
+            );
+
+        expect(reloads, 1);
+        // The known conversation is untouched by the unknown-conv event.
+        expect(container.read(conversationsProvider).conversations.length, 1);
       });
 
       test('does not affect other conversations in the list', () {

@@ -47,6 +47,7 @@ class CameraScreen extends ConsumerWidget {
                       child: _NoteComposer(
                         notifier: notifier,
                         isSending: state.isLoading,
+                        error: state.error,
                       ),
                     )
                   else if (isNotePlayback)
@@ -391,8 +392,13 @@ enum _NotePicker { background, text }
 class _NoteComposer extends StatefulWidget {
   final CameraNotifier notifier;
   final bool isSending;
+  final String? error;
 
-  const _NoteComposer({required this.notifier, required this.isSending});
+  const _NoteComposer({
+    required this.notifier,
+    required this.isSending,
+    this.error,
+  });
 
   @override
   State<_NoteComposer> createState() => _NoteComposerState();
@@ -400,7 +406,9 @@ class _NoteComposer extends StatefulWidget {
 
 class _NoteComposerState extends State<_NoteComposer> {
   final _controller = TextEditingController();
-  Color _background = charcoal;
+  // charcoal2, not charcoal: the default note must stay visible as a thumbnail
+  // against the charcoal strip (Ashe, 7/25). Full palette still available.
+  Color _background = charcoal2;
   Color _textColor = warmWhite;
   // Which palette is open — one at a time; a pick applies and closes it
   // (the same tap-to-expand, select-to-collapse feel as Settings rows).
@@ -462,6 +470,19 @@ class _NoteComposerState extends State<_NoteComposer> {
               ),
             ),
           ),
+
+          // A failed send surfaces here — never a silent nothing-happened
+          // (the notifier keeps the composer open so the text isn't lost).
+          if (widget.error != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+              child: Text(
+                widget.error!,
+                key: const Key('note-send-error'),
+                style: t.errorText,
+                textAlign: TextAlign.center,
+              ),
+            ),
 
           // The open palette (if any), then the control row: two camera-style
           // color buttons + Send.
@@ -673,6 +694,11 @@ class _ThumbnailStrip extends StatelessWidget {
                           ? Color(payload.backgroundColor)
                           : charcoal2,
                       borderRadius: BorderRadius.circular(8),
+                      // Hairline edge so a dark note (incl. deliberately
+                      // charcoal ones) never disappears into the strip.
+                      border: Border.all(
+                        color: warmWhite.withValues(alpha: 0.15),
+                      ),
                     ),
                     child: Center(
                       child: payload != null

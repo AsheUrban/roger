@@ -271,6 +271,17 @@ class ConversationsNotifier extends Notifier<ConversationsState> {
     final currentUserId = ref.read(currentUserIdProvider);
     final isFromOther = senderId != currentUserId;
 
+    // A message for a conversation not in the list means a brand-new
+    // conversation (e.g. a 1:1 just created from Search, or a group someone
+    // added us to). The map below can only update existing rows, so re-fetch
+    // — otherwise the chat wouldn't appear until an app restart.
+    final known = state.conversations
+        .any((summary) => summary.conversation.id == conversationId);
+    if (!known) {
+      loadConversations();
+      return;
+    }
+
     final updated = state.conversations.map((summary) {
       if (summary.conversation.id != conversationId) return summary;
       return summary.copyWith(

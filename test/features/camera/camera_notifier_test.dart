@@ -320,6 +320,28 @@ void main() {
         expect(state.error, isNotNull);
         expect(state.isLoading, false);
       });
+
+      test('a StateError (e.g. "member has no published key") surfaces its '
+          'message, not "Bad state: ..."', () async {
+        when(() => keyService.getConversationKey(_convId)).thenThrow(
+            StateError("This conversation can't be encrypted yet — a member "
+                "hasn't opened roger since encryption was added."));
+
+        final container = makeContainer();
+        final notifier = container.read(cameraProvider(_convId).notifier);
+        notifier.enterNoteComposer();
+
+        await notifier.sendNote(
+          text: 'hello',
+          backgroundColor: 0xFF1E1D18,
+          textColor: 0xFFFAFAF5,
+        );
+
+        final state = container.read(cameraProvider(_convId));
+        expect(state.error, isNotNull);
+        expect(state.error, isNot(contains('Bad state')));
+        expect(state.error, contains("can't be encrypted yet"));
+      });
     });
 
     group('playback (note viewer)', () {
