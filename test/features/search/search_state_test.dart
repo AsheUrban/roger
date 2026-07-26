@@ -90,6 +90,24 @@ void main() {
           isNot(equals(const SearchState(selectedUserIds: ['u-1']))));
     });
 
+    test('not equal when groupModeFromConversations differs', () {
+      expect(const SearchState(),
+          isNot(equals(const SearchState(groupModeFromConversations: true))));
+    });
+
+    test('not equal when repliedUserIds differ', () {
+      expect(const SearchState(repliedUserIds: {}),
+          isNot(equals(const SearchState(repliedUserIds: {'u-1'}))));
+    });
+
+    test('equal when repliedUserIds have same content, different set identity',
+        () {
+      final a = SearchState(repliedUserIds: {'u-1', 'u-2'});
+      final b = SearchState(repliedUserIds: {'u-2', 'u-1'});
+      expect(a, equals(b));
+      expect(a.hashCode, equals(b.hashCode));
+    });
+
     test('copyWith with no changes produces an equal instance', () {
       const a = SearchState(query: 'jordan', isGroupMode: true);
       final b = a.copyWith();

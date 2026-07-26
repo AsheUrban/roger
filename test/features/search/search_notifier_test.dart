@@ -144,11 +144,30 @@ void main() {
     });
 
     group('group mode', () {
+      // Group eligibility (spec §9, 2026-07-25): only people who have REPLIED
+      // to the current user in a 1:1 are selectable. The notifier loads the
+      // replied set from ConversationService when group mode is entered.
+      void stubPartners(Map<String, ({String conversationId, bool hasReplied})>
+          partners) {
+        when(() => conversationService.getOneToOnePartners(
+              currentUserId: any(named: 'currentUserId'),
+            )).thenAnswer((_) async => partners);
+      }
+
+      Map<String, ({String conversationId, bool hasReplied})> replied(
+              List<String> ids) =>
+          {
+            for (final id in ids)
+              id: (conversationId: 'conv-$id', hasReplied: true),
+          };
+
       test('enter / toggle / cap at 4 / exit', () async {
         final container = makeContainer();
         final notifier = container.read(searchProvider.notifier);
+        stubPartners(replied(['user-0', 'user-1', 'user-2', 'user-3', 'user-4']));
 
         notifier.enterGroupMode();
+        await pumpEventQueue();
         expect(container.read(searchProvider).isGroupMode, true);
 
         for (var i = 0; i < 5; i++) {
@@ -165,11 +184,81 @@ void main() {
         expect(container.read(searchProvider).selectedUserIds, isEmpty);
       });
 
+      test('group mode remembers a Conversations-screen origin; exit clears it',
+          () async {
+        final container = makeContainer();
+        final notifier = container.read(searchProvider.notifier);
+        stubPartners(const {});
+
+        notifier.enterGroupMode(fromConversations: true);
+        expect(
+            container.read(searchProvider).groupModeFromConversations, true);
+
+        notifier.exitGroupMode();
+        expect(
+            container.read(searchProvider).groupModeFromConversations, false);
+
+        // Entered from within Search — no origin flag.
+        notifier.enterGroupMode();
+        expect(
+            container.read(searchProvider).groupModeFromConversations, false);
+      });
+
+      test('entering group mode loads the replied set (eligibility)', () async {
+        final container = makeContainer();
+        final notifier = container.read(searchProvider.notifier);
+        stubPartners({
+          'u-replied': (conversationId: 'c-1', hasReplied: true),
+          'u-silent': (conversationId: 'c-2', hasReplied: false),
+        });
+
+        notifier.enterGroupMode();
+        await pumpEventQueue();
+
+        expect(container.read(searchProvider).repliedUserIds, {'u-replied'});
+      });
+
+      test('toggling someone who has not replied is a no-op', () async {
+        final container = makeContainer();
+        final notifier = container.read(searchProvider.notifier);
+        stubPartners(replied(['u-ok']));
+
+        notifier.enterGroupMode();
+        await pumpEventQueue();
+
+        notifier.toggleContactSelection('u-never-replied');
+        expect(container.read(searchProvider).selectedUserIds, isEmpty);
+
+        notifier.toggleContactSelection('u-ok');
+        expect(container.read(searchProvider).selectedUserIds, ['u-ok']);
+      });
+
+      test('enterGroupModeWithContact keeps an eligible seed and prunes an '
+          'ineligible one once eligibility loads', () async {
+        final container = makeContainer();
+        final notifier = container.read(searchProvider.notifier);
+
+        stubPartners(replied(['u-ok']));
+        notifier.enterGroupModeWithContact('u-ok');
+        await pumpEventQueue();
+        expect(container.read(searchProvider).selectedUserIds, ['u-ok']);
+        notifier.exitGroupMode();
+
+        stubPartners(replied(['someone-else']));
+        notifier.enterGroupModeWithContact('u-never-replied');
+        await pumpEventQueue();
+        expect(container.read(searchProvider).selectedUserIds, isEmpty,
+            reason: 'a long-press on an un-replied contact opens group mode '
+                'with nothing selected (spec §18 edge case)');
+      });
+
       test('createGroupConversation calls the service with members + self',
           () async {
         final container = makeContainer();
         final notifier = container.read(searchProvider.notifier);
+        stubPartners(replied(['u-1', 'u-2']));
         notifier.enterGroupMode();
+        await pumpEventQueue();
         notifier.toggleContactSelection('u-1');
         notifier.toggleContactSelection('u-2');
 
@@ -218,7 +307,14 @@ void main() {
           'mode, and returns null', () async {
         final container = makeContainer();
         final notifier = container.read(searchProvider.notifier);
+        when(() => conversationService.getOneToOnePartners(
+              currentUserId: any(named: 'currentUserId'),
+            )).thenAnswer((_) async => {
+              'u-1': (conversationId: 'c-1', hasReplied: true),
+              'u-2': (conversationId: 'c-2', hasReplied: true),
+            });
         notifier.enterGroupMode();
+        await pumpEventQueue();
         notifier.toggleContactSelection('u-1');
         notifier.toggleContactSelection('u-2');
 

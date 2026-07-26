@@ -39,7 +39,14 @@ class SearchState {
   // "Invited" instead of the Invite action.
   final bool notOnRogerInvited;
   final bool isGroupMode;
+  // True when group mode was entered from the Conversations screen's + sheet —
+  // Cancel then returns there instead of staying on Search (Ashe, 7/25).
+  final bool groupModeFromConversations;
   final List<String> selectedUserIds;
+  // People who have replied to the current user in a 1:1 — the only ones
+  // selectable in group mode (spec §9 group prerequisite). Loaded when group
+  // mode is entered.
+  final Set<String> repliedUserIds;
 
   const SearchState({
     this.query = '',
@@ -49,7 +56,9 @@ class SearchState {
     this.notOnRogerName,
     this.notOnRogerInvited = false,
     this.isGroupMode = false,
+    this.groupModeFromConversations = false,
     this.selectedUserIds = const [],
+    this.repliedUserIds = const {},
   });
 
   SearchState copyWith({
@@ -60,7 +69,9 @@ class SearchState {
     String? Function()? notOnRogerName,
     bool? notOnRogerInvited,
     bool? isGroupMode,
+    bool? groupModeFromConversations,
     List<String>? selectedUserIds,
+    Set<String>? repliedUserIds,
   }) {
     return SearchState(
       query: query ?? this.query,
@@ -71,7 +82,10 @@ class SearchState {
           notOnRogerName != null ? notOnRogerName() : this.notOnRogerName,
       notOnRogerInvited: notOnRogerInvited ?? this.notOnRogerInvited,
       isGroupMode: isGroupMode ?? this.isGroupMode,
+      groupModeFromConversations:
+          groupModeFromConversations ?? this.groupModeFromConversations,
       selectedUserIds: selectedUserIds ?? this.selectedUserIds,
+      repliedUserIds: repliedUserIds ?? this.repliedUserIds,
     );
   }
 
@@ -86,7 +100,9 @@ class SearchState {
         other.notOnRogerName == notOnRogerName &&
         other.notOnRogerInvited == notOnRogerInvited &&
         other.isGroupMode == isGroupMode &&
-        listEquals(other.selectedUserIds, selectedUserIds);
+        other.groupModeFromConversations == groupModeFromConversations &&
+        listEquals(other.selectedUserIds, selectedUserIds) &&
+        setEquals(other.repliedUserIds, repliedUserIds);
   }
 
   @override
@@ -98,6 +114,8 @@ class SearchState {
         notOnRogerName,
         notOnRogerInvited,
         isGroupMode,
+        groupModeFromConversations,
         Object.hashAll(selectedUserIds),
+        Object.hashAllUnordered(repliedUserIds),
       );
 }

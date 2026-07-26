@@ -151,7 +151,10 @@ class ConversationsScreen extends ConsumerWidget {
                       title: Text('New group', style: t.rowName),
                       onTap: () {
                         Navigator.pop(context);
-                        ref.read(searchProvider.notifier).enterGroupMode();
+                        // fromConversations: Cancel in group mode returns here.
+                        ref
+                            .read(searchProvider.notifier)
+                            .enterGroupMode(fromConversations: true);
                         context.go('/search');
                       },
                     ),

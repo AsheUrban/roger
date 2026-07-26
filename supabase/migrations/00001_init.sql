@@ -43,7 +43,9 @@ create extension if not exists pgcrypto with schema extensions; -- digest() for 
 --    lives here. phone_hash + recovery_email are in user_private (below).
 create table public.users (
   id              uuid primary key references auth.users(id) on delete cascade,
-  avatar_color    text not null,
+  avatar_color    text not null
+    check (avatar_color in ('Deep Red','Rust','Deep Ember','Burnt Orange',
+                            'Salmon','Rose','Olive','Cornflower')),
   last_active_at  timestamptz,
   created_at      timestamptz not null default now()
 );
@@ -74,6 +76,12 @@ create table public.conversation_members (
   custom_emoji    jsonb,
   wildcard_emoji  text,
   muted           boolean not null default false,
+  -- When this member first sent a message in this conversation. Stamped by
+  -- the stamp_first_message trigger, never cleared — so it survives messages
+  -- rolling off or being deleted. Backs the spec §9 group prerequisite
+  -- ("replied in a 1:1"). Server-derived: client UPDATE on this table is
+  -- column-restricted (see grants below), so a client can't fake it.
+  first_message_at timestamptz,
 
   unique (conversation_id, user_id)
 );
@@ -343,11 +351,38 @@ begin
 end;
 $$;
 
+-- Stamps the sender's membership row the first time they post in a
+-- conversation (conversation_members.first_message_at). Once set, never
+-- cleared — the spec §9 "replied in a 1:1" signal must survive messages
+-- rolling off or being deleted. SECURITY DEFINER so the stamp doesn't depend
+-- on client-side grants.
+create or replace function public.stamp_first_message()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.conversation_members
+     set first_message_at = new.created_at
+   where conversation_id = new.conversation_id
+     and user_id = new.sender_id
+     and first_message_at is null;
+  return new;
+end;
+$$;
+
+create trigger messages_stamp_first_message
+  after insert on public.messages
+  for each row execute function public.stamp_first_message();
+
 -- Atomic conversation + memberships creation. Avoids the RLS chicken-and-egg
 -- where a client .select() on the conversation insert would fail before the
 -- caller is a member. Spec §9: groups capped at 5; creator must be a member.
--- Also enforces the per-(adder, addee) daily add cap (spec §9): a member can be
--- added to at most v_add_cap conversations per day by the same person.
+-- Also enforces the spec §9 group prerequisite (every group member must have
+-- replied to the caller in a 1:1) and the per-(adder, addee) add cap (spec
+-- §9): a member can be added to at most v_add_cap conversations per rolling
+-- 12h window by the same person.
 create or replace function public.create_conversation(
   p_name text,
   p_member_ids uuid[]
@@ -378,6 +413,33 @@ begin
   if array_length(p_member_ids, 1) > 5 then
     raise exception 'Conversation exceeds maximum of 5 members'
       using errcode = '23514';
+  end if;
+
+  -- Group prerequisite (spec §9): every member of a GROUP (3+ members) must
+  -- have replied to the caller in a 1:1 — an existing conversation with
+  -- exactly two member rows (caller + member) where the member's
+  -- first_message_at is set. Creating a 1:1 stays ungated (a 1:1 is where a
+  -- relationship starts). The client picker prevents this path for honest
+  -- users; this check is the real boundary for clients that bypass the UI.
+  if array_length(p_member_ids, 1) > 2 then
+    foreach v_member in array p_member_ids loop
+      if v_member <> v_caller then
+        if not exists (
+          select 1
+          from public.conversation_members them
+          join public.conversation_members me
+            on me.conversation_id = them.conversation_id
+          where them.user_id = v_member
+            and them.first_message_at is not null
+            and me.user_id = v_caller
+            and (select count(*) from public.conversation_members c
+                 where c.conversation_id = them.conversation_id) = 2
+        ) then
+          raise exception
+            'Everyone in a group needs to have replied to you in a 1:1 first.';
+        end if;
+      end if;
+    end loop;
   end if;
 
   -- Per-(adder, addee) rolling-window add cap: 5 per pair per 12h. The counter
@@ -640,6 +702,11 @@ create policy "conversations: update for members"
   using (public.is_conversation_member(id))
   with check (public.is_conversation_member(id));
 
+-- Column-restricted: name (the §9 group rename) is the only client-writable
+-- column. Extend deliberately when group profile pics land (avatar_r2_key).
+revoke update on public.conversations from authenticated;
+grant update (name) on public.conversations to authenticated;
+
 -- 3. conversation_members
 alter table public.conversation_members enable row level security;
 
@@ -657,10 +724,20 @@ create policy "conversation_members: update own"
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
 
-create policy "conversation_members: delete own"
-  on public.conversation_members for delete
-  to authenticated
-  using (user_id = auth.uid());
+-- No client DELETE on conversation_members: leaving is an UPDATE of left_at,
+-- and membership ROWS are load-bearing — the §9 gate and the client's true-1:1
+-- rule both count total rows per conversation, and first_message_at is
+-- never-cleared (§15). A deletable row would let a member shrink a group into
+-- a "1:1" (bypassing the reply gate) or erase their reply stamp.
+
+-- Column-restricted like users / user_private: the user-preference columns
+-- (and left_at, for leave) are the only client-writable ones. Keeps a client
+-- from faking its own first_message_at — the §9 group-eligibility signal is
+-- server-derived (stamp trigger) only.
+-- NOTE: extend this grant when step 8 adds user_avatar_r2_key.
+revoke update on public.conversation_members from authenticated;
+grant update (custom_emoji, wildcard_emoji, muted, left_at)
+  on public.conversation_members to authenticated;
 
 -- 4. messages
 alter table public.messages enable row level security;
@@ -689,6 +766,12 @@ create policy "messages: update own"
     sender_id = auth.uid()
     and public.is_conversation_member(conversation_id)
   );
+
+-- No client-writable message columns today (messages are immutable once sent;
+-- expiry/nudge fields are server concerns at step 11). Without this, a sender
+-- could rewrite conversation_id and move their message between conversations
+-- they belong to. Re-grant specific columns when a real client write appears.
+revoke update on public.messages from authenticated;
 
 create policy "messages: delete own"
   on public.messages for delete
@@ -922,3 +1005,13 @@ grant execute on function public.create_conversation(text, uuid[]) to authentica
 grant execute on function public.create_account(text) to authenticated;
 grant execute on function public.discover_user(text) to authenticated;
 grant execute on function public.distribute_conversation_keys(uuid, jsonb) to authenticated;
+
+-- ============================================================
+-- REALTIME — postgres_changes only emits for tables in the supabase_realtime
+-- publication. Without this, message delivery (Camera stream, Conversations
+-- live updates) silently produces no events — REST paths keep working, so the
+-- breakage looks like a client bug. (Learned 7/25: the publication was found
+-- empty; dropping tables also silently removes them from publications, so any
+-- future baseline re-apply MUST re-add them.)
+-- ============================================================
+alter publication supabase_realtime add table public.messages;

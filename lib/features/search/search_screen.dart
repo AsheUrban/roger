@@ -80,7 +80,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       children: [
                         Text('New group', style: t.screenTitle),
                         GestureDetector(
-                          onTap: notifier.exitGroupMode,
+                          onTap: () {
+                            // Cancel returns to wherever group mode started:
+                            // the Conversations + sheet, or Search itself.
+                            final backToConversations =
+                                state.groupModeFromConversations;
+                            notifier.exitGroupMode();
+                            if (backToConversations) {
+                              context.go('/conversations');
+                            }
+                          },
                           child: Text('Cancel', style: t.bodySubdued),
                         ),
                       ],
@@ -246,6 +255,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               isGroupMode: state.isGroupMode,
                               isSelected:
                                   state.selectedUserIds.contains(result.userId),
+                              // Spec §9: only people who have replied in a 1:1
+                              // can be put in a group.
+                              isGroupEligible: !state.isGroupMode ||
+                                  state.repliedUserIds.contains(result.userId),
                               onChat: () async {
                                 final convId =
                                     await notifier.startChat(result.userId);
@@ -310,6 +323,7 @@ class _AddedContactRow extends StatelessWidget {
   final AddedContactResult result;
   final bool isGroupMode;
   final bool isSelected;
+  final bool isGroupEligible;
   final VoidCallback onChat;
   final VoidCallback onToggleSelect;
   final VoidCallback? onLongPress;
@@ -318,6 +332,7 @@ class _AddedContactRow extends StatelessWidget {
     required this.result,
     required this.isGroupMode,
     required this.isSelected,
+    this.isGroupEligible = true,
     required this.onChat,
     required this.onToggleSelect,
     this.onLongPress,
@@ -331,56 +346,82 @@ class _AddedContactRow extends StatelessWidget {
     final colors = avatarColorMap[result.avatarColor] ?? (charcoal2, warmWhite);
 
     return GestureDetector(
-      onTap: isGroupMode ? onToggleSelect : null,
+      // Un-replied contacts can't be selected for a group (spec §9); the
+      // server enforces the same rule in create_conversation.
+      onTap: isGroupMode && isGroupEligible ? onToggleSelect : null,
       onLongPress: onLongPress,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Row(
-          children: [
-            if (isGroupMode) ...[
-              Icon(
-                isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-                color: isSelected ? warmWhite : warmWhite.withValues(alpha: 0.3),
-                size: 22,
-              ),
-              const SizedBox(width: 12),
-            ],
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: colors.$1,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  initials,
-                  style: t.avatarInitialLarge.copyWith(color: colors.$2),
+      behavior: HitTestBehavior.opaque,
+      child: Opacity(
+        opacity: isGroupEligible ? 1.0 : 0.45,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Row(
+            children: [
+              if (isGroupMode) ...[
+                Icon(
+                  isSelected
+                      ? Icons.check_circle
+                      : Icons.radio_button_unchecked,
+                  color:
+                      isSelected ? warmWhite : warmWhite.withValues(alpha: 0.3),
+                  size: 22,
                 ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                displayName,
-                style: t.rowName,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (!isGroupMode)
-              GestureDetector(
-                onTap: onChat,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: warmWhite, width: 1.5),
-                    borderRadius: BorderRadius.circular(20),
+                const SizedBox(width: 12),
+              ],
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: colors.$1,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    initials,
+                    style: t.avatarInitialLarge.copyWith(color: colors.$2),
                   ),
-                  child: Text('Chat', style: t.pillLabel),
                 ),
               ),
-          ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      displayName,
+                      style: t.rowName,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (!isGroupEligible)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          // Ashe's copy, verbatim (LOG_7_25) — name templated.
+                          'Start a 1:1 chat with $displayName — once they '
+                          'reply, you can add them to a group.',
+                          key: Key('ineligible-hint-${result.userId}'),
+                          style: t.bodyDimmed,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (!isGroupMode)
+                GestureDetector(
+                  onTap: onChat,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: warmWhite, width: 1.5),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text('Chat', style: t.pillLabel),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

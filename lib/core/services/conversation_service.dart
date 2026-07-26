@@ -1,5 +1,49 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Builds the caller's 1:1 partner map from the raw member rows of every
+/// conversation they belong to. Pure — extracted (like `routerRedirect` /
+/// `name_resolution`) so the true-1:1 rule is unit-testable without Supabase.
+///
+/// A **true 1:1** is a conversation with exactly two member rows total — the
+/// caller and one other real user. Total rows, not active rows: leaving sets
+/// `left_at` but keeps the row, so a group never collapses into a "1:1", and
+/// membership is fixed at creation so a 1:1 can never grow into a group.
+/// `hasReplied` is whether the PARTNER has sent a message there
+/// (`first_message_at` set) — the §9 group-eligibility signal. Duplicate 1:1s
+/// with the same partner merge, preferring a replied one, so eligibility is
+/// never understated and Chat opens the live thread.
+Map<String, ({String conversationId, bool hasReplied})>
+    oneToOnePartnersFromRows(
+  List<Map<String, dynamic>> memberRows,
+  String currentUserId,
+) {
+  final byConversation = <String, List<Map<String, dynamic>>>{};
+  for (final row in memberRows) {
+    byConversation
+        .putIfAbsent(row['conversation_id'] as String, () => [])
+        .add(row);
+  }
+
+  final partners = <String, ({String conversationId, bool hasReplied})>{};
+  for (final entry in byConversation.entries) {
+    final rows = entry.value;
+    if (rows.length != 2) continue; // groups are never 1:1s
+    final mine = rows.where((r) => r['user_id'] == currentUserId);
+    if (mine.length != 1) continue; // defensive: conversation isn't mine
+    final other = rows.firstWhere((r) => r['user_id'] != currentUserId);
+    final otherId = other['user_id'] as String?;
+    if (otherId == null) continue; // partner deleted their account
+
+    final hasReplied = other['first_message_at'] != null;
+    final existing = partners[otherId];
+    if (existing == null || (hasReplied && !existing.hasReplied)) {
+      partners[otherId] =
+          (conversationId: entry.key, hasReplied: hasReplied);
+    }
+  }
+  return partners;
+}
+
 /// Owns conversation creation against Supabase.
 ///
 /// All conversation creation flows (1:1 chat, group chat, invite-pending)
@@ -32,33 +76,48 @@ class ConversationService {
     return result as String;
   }
 
-  /// Returns the id of the existing 1:1 conversation between [currentUserId]
-  /// and [otherUserId], or creates a new one and returns its id. Never
-  /// creates duplicates — spec §9 (Search): tapping Chat must open the
-  /// existing conversation when one exists.
-  Future<String> findOrCreate1to1({
-    required String currentUserId,
-    required String otherUserId,
-  }) async {
+  /// The caller's true-1:1 partner map: `userId → (conversationId,
+  /// hasReplied)`. One shape, two consumers — [findOrCreate1to1] resolves
+  /// Chat through it, and the Search group picker reads `hasReplied` for §9
+  /// eligibility. RLS already scopes both queries to conversations the caller
+  /// belongs to.
+  Future<Map<String, ({String conversationId, bool hasReplied})>>
+      getOneToOnePartners({required String currentUserId}) async {
     final myMemberships = await _client
         .from('conversation_members')
         .select('conversation_id')
         .eq('user_id', currentUserId)
         .isFilter('left_at', null);
 
-    final theirMemberships = await _client
+    final conversationIds = (myMemberships as List)
+        .map((r) => r['conversation_id'] as String)
+        .toList();
+    if (conversationIds.isEmpty) return const {};
+
+    final memberRows = await _client
         .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', otherUserId)
-        .isFilter('left_at', null);
+        .select('conversation_id, user_id, first_message_at')
+        .inFilter('conversation_id', conversationIds);
 
-    final mine =
-        (myMemberships as List).map((r) => r['conversation_id']).toSet();
-    final theirs =
-        (theirMemberships as List).map((r) => r['conversation_id']).toSet();
-    final shared = mine.intersection(theirs);
+    return oneToOnePartnersFromRows(
+      (memberRows as List).cast<Map<String, dynamic>>(),
+      currentUserId,
+    );
+  }
 
-    if (shared.isNotEmpty) return shared.first as String;
+  /// Returns the id of the existing **true 1:1** conversation between
+  /// [currentUserId] and [otherUserId], or creates a new one and returns its
+  /// id. Never creates duplicates, and never resolves to a shared group —
+  /// spec §18 (Search): Chat resolves strictly to a 1:1, a conversation whose
+  /// membership is exactly the two users. (The old id-intersection version
+  /// could open a group both happened to be in.)
+  Future<String> findOrCreate1to1({
+    required String currentUserId,
+    required String otherUserId,
+  }) async {
+    final partners = await getOneToOnePartners(currentUserId: currentUserId);
+    final existing = partners[otherUserId];
+    if (existing != null) return existing.conversationId;
 
     return createConversation(memberIds: [currentUserId, otherUserId]);
   }

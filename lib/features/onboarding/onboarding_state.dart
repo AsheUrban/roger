@@ -10,6 +10,9 @@ class OnboardingState {
   final bool isLoading;
   final String? error;
   final bool onboardingComplete;
+  // Seconds until Resend re-enables (spec §18: available after 30 seconds).
+  // 0 = resend allowed.
+  final int resendCooldown;
 
   const OnboardingState({
     this.step = OnboardingStep.phoneEntry,
@@ -18,6 +21,7 @@ class OnboardingState {
     this.isLoading = false,
     this.error,
     this.onboardingComplete = false,
+    this.resendCooldown = 0,
   });
 
   OnboardingState copyWith({
@@ -27,6 +31,7 @@ class OnboardingState {
     bool? isLoading,
     String? Function()? error,
     bool? onboardingComplete,
+    int? resendCooldown,
   }) {
     return OnboardingState(
       step: step ?? this.step,
@@ -35,6 +40,7 @@ class OnboardingState {
       isLoading: isLoading ?? this.isLoading,
       error: error != null ? error() : this.error,
       onboardingComplete: onboardingComplete ?? this.onboardingComplete,
+      resendCooldown: resendCooldown ?? this.resendCooldown,
     );
   }
 
@@ -47,7 +53,8 @@ class OnboardingState {
         other.avatarColor == avatarColor &&
         other.isLoading == isLoading &&
         other.error == error &&
-        other.onboardingComplete == onboardingComplete;
+        other.onboardingComplete == onboardingComplete &&
+        other.resendCooldown == resendCooldown;
   }
 
   @override
@@ -58,5 +65,6 @@ class OnboardingState {
         isLoading,
         error,
         onboardingComplete,
+        resendCooldown,
       );
 }

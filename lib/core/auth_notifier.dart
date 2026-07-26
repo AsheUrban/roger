@@ -58,8 +58,11 @@ class AuthNotifier extends Notifier<AuthState> {
           // Definitive null — authenticated but no public.users row. The
           // residual edge-case flash is paid here.
           state = const AuthStateNeedsOnboarding();
+          return;
         }
-        // Non-null: stay Onboarded (already the seed).
+        // Non-null: stay Onboarded (already the seed) — and make sure this
+        // account's public key is published (spec §7).
+        _publishKeys();
       } catch (_) {
         // Error-resilient: a thrown error is inconclusive (transient 401
         // mid-token-refresh, network failure). Leaving the optimistic
@@ -76,6 +79,24 @@ class AuthNotifier extends Notifier<AuthState> {
   /// navigation. Flips state to `Onboarded` so the redirect won't bounce.
   void markOnboarded() {
     state = const AuthStateOnboarded();
+    _publishKeys();
+  }
+
+  /// Spec §7: a key pair exists from account creation — without it, nobody
+  /// can encrypt TO this user, so a fresh account would be unreachable until
+  /// it first sent something. Fired (not awaited) on account creation and on
+  /// every confirmed-onboarded launch; `ensureOwnKeyPair` is idempotent.
+  /// Failures are swallowed — the next launch retries, and the send path
+  /// still ensures keys lazily.
+  void _publishKeys() {
+    final keyService = ref.read(keyServiceProvider);
+    Future.microtask(() async {
+      try {
+        await keyService.ensureOwnKeyPair();
+      } catch (_) {
+        // Offline or transient — retried next launch / first send.
+      }
+    });
   }
 }
 

@@ -134,16 +134,64 @@ class SearchNotifier extends Notifier<SearchState> {
 
   // ── Group mode ──────────────────────────────────────────────────────────
 
-  void enterGroupMode() {
-    state = state.copyWith(isGroupMode: true, selectedUserIds: []);
+  /// [fromConversations] marks group mode entered via the Conversations
+  /// screen's + sheet — Cancel then returns there (Ashe, 7/25).
+  void enterGroupMode({bool fromConversations = false}) {
+    state = state.copyWith(
+      isGroupMode: true,
+      groupModeFromConversations: fromConversations,
+      selectedUserIds: [],
+      repliedUserIds: {},
+    );
+    _loadGroupEligibility();
   }
 
   void enterGroupModeWithContact(String userId) {
-    state = state.copyWith(isGroupMode: true, selectedUserIds: [userId]);
+    // Seed optimistically; _loadGroupEligibility prunes the seed if this
+    // contact turns out not to have replied (spec §18 edge case: group mode
+    // opens with nothing selected).
+    state = state.copyWith(
+      isGroupMode: true,
+      groupModeFromConversations: false,
+      selectedUserIds: [userId],
+      repliedUserIds: {},
+    );
+    _loadGroupEligibility();
+  }
+
+  /// Loads the §9 eligibility set — people who have replied to the current
+  /// user in a 1:1 are the only ones who can be put in a group. The picker
+  /// dims everyone else; `create_conversation` enforces the same rule
+  /// server-side for clients that bypass the UI.
+  Future<void> _loadGroupEligibility() async {
+    try {
+      final partners = await _conversationService.getOneToOnePartners(
+        currentUserId: _currentUserId!,
+      );
+      if (!ref.mounted) return;
+      final replied = <String>{
+        for (final entry in partners.entries)
+          if (entry.value.hasReplied) entry.key,
+      };
+      state = state.copyWith(
+        repliedUserIds: replied,
+        selectedUserIds:
+            state.selectedUserIds.where(replied.contains).toList(),
+      );
+    } catch (e) {
+      if (!ref.mounted) return;
+      // Eligibility unknown — leave everyone unselectable (empty set) rather
+      // than guessing; the server gate is the real boundary either way.
+      state = state.copyWith(error: () => e.toString());
+    }
   }
 
   void exitGroupMode() {
-    state = state.copyWith(isGroupMode: false, selectedUserIds: []);
+    state = state.copyWith(
+      isGroupMode: false,
+      groupModeFromConversations: false,
+      selectedUserIds: [],
+    );
   }
 
   void toggleContactSelection(String userId) {
@@ -151,6 +199,8 @@ class SearchNotifier extends Notifier<SearchState> {
     if (current.contains(userId)) {
       current.remove(userId);
     } else {
+      // Only people who have replied in a 1:1 are selectable (spec §9).
+      if (!state.repliedUserIds.contains(userId)) return;
       // Groups capped at 5 — you + 4 others.
       if (current.length >= 4) return;
       current.add(userId);

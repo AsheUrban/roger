@@ -10,6 +10,7 @@ import 'package:roger/features/search/search_state.dart';
 class _FakeSearchNotifier extends SearchNotifier {
   final SearchState _initialState;
   final List<String?> createGroupCalls = [];
+  final List<String> toggledContacts = [];
   int addSomeoneCalls = 0;
   _FakeSearchNotifier(this._initialState);
 
@@ -26,6 +27,11 @@ class _FakeSearchNotifier extends SearchNotifier {
   @override
   Future<void> invite() async {
     inviteCalls++;
+  }
+
+  @override
+  void toggleContactSelection(String userId) {
+    toggledContacts.add(userId);
   }
 
   @override
@@ -50,6 +56,9 @@ Widget _buildWithFakeNotifier(_FakeSearchNotifier notifier) {
     routes: [
       GoRoute(path: '/', builder: (_, _) => const SearchScreen()),
       GoRoute(path: '/camera/:id', builder: (_, _) => const SizedBox.shrink()),
+      GoRoute(
+          path: '/conversations',
+          builder: (_, _) => const Text('CONVERSATIONS')),
     ],
   );
   return ProviderScope(
@@ -177,6 +186,86 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(notifier.createGroupCalls, [null]);
+      });
+    });
+
+    group('group mode cancel returns to its origin', () {
+      testWidgets('entered from Conversations → Cancel navigates back there',
+          (tester) async {
+        final notifier = _FakeSearchNotifier(const SearchState(
+          isGroupMode: true,
+          groupModeFromConversations: true,
+        ));
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('CONVERSATIONS'), findsOneWidget);
+      });
+
+      testWidgets('entered from within Search → Cancel stays on Search',
+          (tester) async {
+        final notifier =
+            _FakeSearchNotifier(const SearchState(isGroupMode: true));
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('CONVERSATIONS'), findsNothing);
+        expect(find.text('Find people'), findsOneWidget);
+      });
+    });
+
+    group('group eligibility (spec §9 — replied 1:1 required)', () {
+      const eligible = AddedContactResult(
+        userId: 'u-ok',
+        contactName: 'Casey',
+        avatarColor: 'Olive',
+      );
+      const ineligible = AddedContactResult(
+        userId: 'u-silent',
+        contactName: 'Jordan',
+        avatarColor: 'Rust',
+      );
+      const groupState = SearchState(
+        isGroupMode: true,
+        results: [eligible, ineligible],
+        repliedUserIds: {'u-ok'},
+      );
+
+      testWidgets('an un-replied contact renders dimmed with the hint; a '
+          'replied one renders normally', (tester) async {
+        await tester.pumpWidget(_buildWithFakeState(state: groupState));
+        await tester.pumpAndSettle();
+
+        expect(
+            find.byKey(const Key('ineligible-hint-u-silent')), findsOneWidget);
+        // Ashe's copy, locked verbatim (LOG_7_25) — name templated in.
+        expect(
+          find.text('Start a 1:1 chat with Jordan — once they reply, '
+              'you can add them to a group.'),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('ineligible-hint-u-ok')), findsNothing);
+      });
+
+      testWidgets('tapping an un-replied contact does not toggle selection; '
+          'tapping a replied one does', (tester) async {
+        final notifier = _FakeSearchNotifier(groupState);
+        await tester.pumpWidget(_buildWithFakeNotifier(notifier));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Jordan'));
+        await tester.pumpAndSettle();
+        expect(notifier.toggledContacts, isEmpty);
+
+        await tester.tap(find.text('Casey'));
+        await tester.pumpAndSettle();
+        expect(notifier.toggledContacts, ['u-ok']);
       });
     });
 
