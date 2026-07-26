@@ -1,16 +1,20 @@
 import 'dart:math';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:roger/core/models/user.dart';
 import 'package:roger/core/providers.dart';
 import 'package:roger/core/services/auth_service.dart';
+import 'package:roger/core/services/key_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:roger/features/onboarding/onboarding_notifier.dart';
 import 'package:roger/features/onboarding/onboarding_state.dart';
 
 class MockAuthService extends Mock implements AuthService {}
+
+class MockKeyService extends Mock implements KeyService {}
 
 class MockRandom extends Mock implements Random {}
 
@@ -18,6 +22,7 @@ class MockSession extends Mock implements Session {}
 
 void main() {
   late MockAuthService authService;
+  late MockKeyService keyService;
   late MockRandom random;
   late ProviderContainer container;
   late OnboardingNotifier notifier;
@@ -32,14 +37,18 @@ void main() {
 
   setUp(() {
     authService = MockAuthService();
+    keyService = MockKeyService();
     random = MockRandom();
     when(() => random.nextInt(any())).thenReturn(2); // → 'Deep Ember'
     when(() => authService.currentSession).thenReturn(null);
     when(() => authService.authEvents)
         .thenAnswer((_) => Stream<AuthChangeEvent>.empty());
+    when(() => keyService.ensureOwnKeyPair())
+        .thenAnswer((_) async => (publicKey: 'pub', privateKey: 'priv'));
 
     container = ProviderContainer.test(overrides: [
       authServiceProvider.overrideWithValue(authService),
+      keyServiceProvider.overrideWithValue(keyService),
       randomProvider.overrideWithValue(random),
     ]);
 
@@ -205,17 +214,85 @@ void main() {
             ));
       });
 
-      test('resendOtp calls authService again', () async {
-        reset(authService);
-        when(() => authService.currentSession).thenReturn(null);
-        when(() => authService.authEvents)
-            .thenAnswer((_) => Stream<AuthChangeEvent>.empty());
-        when(() => authService.sendOtp('+15550001000'))
-            .thenAnswer((_) async {});
+      test('resendOtp calls authService again once the 30s cooldown has '
+          'elapsed', () {
+        fakeAsync((async) {
+          when(() => authService.sendOtp(any())).thenAnswer((_) async {});
+          notifier.sendOtp('+15550001000');
+          async.flushMicrotasks();
+          expect(notifier.state.resendCooldown, 30);
 
-        await notifier.resendOtp();
+          async.elapse(const Duration(seconds: 30));
+          expect(notifier.state.resendCooldown, 0);
 
-        verify(() => authService.sendOtp('+15550001000')).called(1);
+          notifier.resendOtp();
+          async.flushMicrotasks();
+
+          // The group's setUp (advanceToOtp) + the in-zone send + the resend.
+          verify(() => authService.sendOtp('+15550001000')).called(3);
+        });
+      });
+    });
+
+    group('resend cooldown (spec §18: resend available after 30 seconds)', () {
+      test('sendOtp starts a 30s cooldown that ticks down to zero', () {
+        fakeAsync((async) {
+          when(() => authService.sendOtp(any())).thenAnswer((_) async {});
+          notifier.sendOtp('+15550001000');
+          async.flushMicrotasks();
+
+          expect(notifier.state.resendCooldown, 30);
+          async.elapse(const Duration(seconds: 12));
+          expect(notifier.state.resendCooldown, 18);
+          async.elapse(const Duration(seconds: 18));
+          expect(notifier.state.resendCooldown, 0);
+        });
+      });
+
+      test('resendOtp during the cooldown is a no-op — no SMS is sent', () {
+        fakeAsync((async) {
+          when(() => authService.sendOtp(any())).thenAnswer((_) async {});
+          notifier.sendOtp('+15550001000');
+          async.flushMicrotasks();
+
+          async.elapse(const Duration(seconds: 5));
+          notifier.resendOtp();
+          async.flushMicrotasks();
+
+          verify(() => authService.sendOtp(any())).called(1); // initial only
+        });
+      });
+
+      test('a successful resend restarts the cooldown', () {
+        fakeAsync((async) {
+          when(() => authService.sendOtp(any())).thenAnswer((_) async {});
+          notifier.sendOtp('+15550001000');
+          async.flushMicrotasks();
+          async.elapse(const Duration(seconds: 30));
+
+          notifier.resendOtp();
+          async.flushMicrotasks();
+
+          expect(notifier.state.resendCooldown, 30);
+          async.elapse(const Duration(seconds: 30));
+          expect(notifier.state.resendCooldown, 0);
+        });
+      });
+
+      test('goBack cancels the cooldown', () {
+        fakeAsync((async) {
+          when(() => authService.sendOtp(any())).thenAnswer((_) async {});
+          notifier.sendOtp('+15550001000');
+          async.flushMicrotasks();
+          expect(notifier.state.resendCooldown, 30);
+
+          notifier.goBack();
+          expect(notifier.state.resendCooldown, 0);
+
+          // No stray timer keeps mutating state after the cancel.
+          async.elapse(const Duration(seconds: 60));
+          expect(notifier.state.resendCooldown, 0);
+        });
       });
     });
 

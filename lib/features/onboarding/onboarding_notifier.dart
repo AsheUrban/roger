@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,12 +21,36 @@ final onboardingProvider =
 class OnboardingNotifier extends Notifier<OnboardingState> {
   late final AuthService _authService;
   late final Random _random;
+  Timer? _resendTimer;
 
   @override
   OnboardingState build() {
     _authService = ref.read(authServiceProvider);
     _random = ref.read(randomProvider);
+    ref.onDispose(() => _resendTimer?.cancel());
     return const OnboardingState();
+  }
+
+  /// Spec §18: "Resend option available after 30 seconds." Started on every
+  /// successful send; cancellable Timer (not Future.delayed) so goBack /
+  /// dispose can kill it cleanly.
+  void _startResendCooldown() {
+    _resendTimer?.cancel();
+    state = state.copyWith(resendCooldown: 30);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!ref.mounted) {
+        timer.cancel();
+        return;
+      }
+      final next = state.resendCooldown - 1;
+      state = state.copyWith(resendCooldown: next);
+      if (next <= 0) timer.cancel();
+    });
+  }
+
+  void _cancelResendCooldown() {
+    _resendTimer?.cancel();
+    state = state.copyWith(resendCooldown: 0);
   }
 
   void goBack() {
@@ -34,7 +59,12 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       OnboardingStep.otpVerification => OnboardingStep.phoneEntry,
     };
 
-    state = state.copyWith(step: previous, error: () => null);
+    _resendTimer?.cancel();
+    state = state.copyWith(
+      step: previous,
+      error: () => null,
+      resendCooldown: 0,
+    );
   }
 
   Future<void> sendOtp(String phone) async {
@@ -59,6 +89,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         step: OnboardingStep.otpVerification,
         isLoading: false,
       );
+      _startResendCooldown();
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(
@@ -69,6 +100,11 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
   }
 
   Future<void> resendOtp() async {
+    // Spec §18: resend only becomes available 30s after the last send. The
+    // screen disables the button too; this is the real gate (each resend is a
+    // real SMS in production).
+    if (state.resendCooldown > 0) return;
+
     state = state.copyWith(
       isLoading: true,
       error: () => null,
@@ -78,6 +114,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       await _authService.sendOtp(state.phoneNumber);
       if (!ref.mounted) return;
       state = state.copyWith(isLoading: false);
+      _startResendCooldown();
     } catch (e) {
       if (!ref.mounted) return;
       state = state.copyWith(
@@ -139,6 +176,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
         // Existing user — already onboarded. Flip cached auth state to
         // Onboarded before the screen's `context.go('/search')` so the
         // synchronous redirect sees the new state and doesn't bounce.
+        _cancelResendCooldown();
         ref.read(authProvider.notifier).markOnboarded();
         state = state.copyWith(
           isLoading: false,
@@ -161,6 +199,7 @@ class OnboardingNotifier extends Notifier<OnboardingState> {
       // Land straight on Search — there is no contacts-permission step under
       // single-pick (spec §10). Flip cached auth state before the screen's
       // navigation so the redirect doesn't bounce.
+      _cancelResendCooldown();
       ref.read(authProvider.notifier).markOnboarded();
       state = state.copyWith(
         isLoading: false,

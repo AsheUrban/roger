@@ -67,6 +67,12 @@ void main() {
       expect(a, isNot(equals(b)));
     });
 
+    test('not equal when resendCooldown differs', () {
+      final a = OnboardingState();
+      final b = OnboardingState(resendCooldown: 30);
+      expect(a, isNot(equals(b)));
+    });
+
     test('copyWith with no changes produces an equal instance', () {
       final a = OnboardingState(
         step: OnboardingStep.otpVerification,

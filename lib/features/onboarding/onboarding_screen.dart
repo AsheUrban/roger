@@ -184,7 +184,11 @@ class _OtpVerificationStepState extends ConsumerState<_OtpVerificationStep> {
         ),
         const SizedBox(height: 16),
         TextButton(
-          onPressed: state.isLoading ? null : notifier.resendOtp,
+          // Spec §18: resend available 30s after the send. The notifier holds
+          // the real gate; this mirrors it in the UI.
+          onPressed: state.isLoading || state.resendCooldown > 0
+              ? null
+              : notifier.resendOtp,
           child: const Text(
             'Resend code',
             style: t.buttonLabel,
